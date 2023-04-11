@@ -4,7 +4,6 @@ import numpy as np
 from bisect import bisect_left
 import time
 from scipy.interpolate import RectBivariateSpline
-import cv2
 
 def getslices(bounds,arr):
     '''given a range, get the idxs corresponding to that range in the sorted array arr '''
@@ -17,18 +16,7 @@ def getslices(bounds,arr):
     else:
         raise Exception("malformed bounds input in getslices(); check savex,savey,savez in config.py")
 
-def resize(u0,shape):
-    '''resample a complex-valued array'''
-    if u0.dtype == np.complex:
-        ur = np.real(u0)
-        ui = np.imag(u0)
-        ur = cv2.resize(ur,shape)
-        ui = cv2.resize(ui,shape)
-        return ur+1.j*ui
-    else:
-        return cv2.resize(u0,shape)
-
-def resize2(image,newshape):
+def resize(image,newshape):
     '''another resampling function that uses scipy, not cv2'''
     xpix = np.arange(image.shape[0])
     ypix = np.arange(image.shape[1])
@@ -53,29 +41,6 @@ def norm_nonu(u0,weights,normval = 1):
     norm = np.sqrt(normval/overlap_nonu(u0,u0,weights))
     u0 *= norm
     return u0
-
-def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
-    """
-    Pulled from https://stackoverflow.com/questions/3173320/text-progress-bar-in-the-console
-
-    Call in a loop to create terminal progress bar
-    @params:
-        iteration   - Required  : current iteration (Int)
-        total       - Required  : total iterations (Int)
-        prefix      - Optional  : prefix string (Str)
-        suffix      - Optional  : suffix string (Str)
-        decimals    - Optional  : positive number of decimals in percent complete (Int)
-        length      - Optional  : character length of bar (Int)
-        fill        - Optional  : bar fill character (Str)
-        printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
-    """
-    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
-    filledLength = int(length * iteration // total)
-    bar = fill * filledLength + '-' * (length - filledLength)
-    print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end = printEnd)
-    # Print New Line on Complete
-    if iteration == total: 
-        print()
 
 def timeit(method):
     '''pulled from someone's github or something. can't find it anymore'''

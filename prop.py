@@ -8,7 +8,9 @@ os.environ['NUMEXPR_NUM_THREADS'] = '8'
 import numexpr as ne
 from mesh import RectMesh3D,RectMesh2D
 import optics
-from misc import timeit, overlap, normalize,printProgressBar, overlap_nonu, norm_nonu,resize
+from misc import timeit, overlap, normalize, overlap_nonu, norm_nonu,resize
+from tqdm.auto import tqdm, trange
+from tridiag_jl import tri_solve_vecjl
 
 ### to do ###
 
@@ -483,9 +485,7 @@ class Prop3D:
         #plt.show()
 
         print("initial shape: ",xy.shape)
-        for i in range(total_iters):       
-            if i%20 == 0: 
-                printProgressBar(i,total_iters-1)
+        for i in trange(total_iters):
             u0 = xy.get_base_field(u)
             u0c = np.conj(u0)
             weights = xy.get_weights()
@@ -601,7 +601,7 @@ class Prop3D:
             np.save(writeto,self.field)
         return u,u0
 
-    @timeit 
+    # @timeit 
     def prop2end_uniform(self,u,xyslice=None,zslice=None,u1_func=None,writeto=None,dynamic_n0 = False,fplanewidth=0):
         mesh = self.mesh
         PML = mesh.PML
@@ -677,9 +677,7 @@ class Prop3D:
         weights = xy.get_weights()
 
         print("initial shape: ",xy.shape)
-        for i in range(total_iters):       
-            if i%20 == 0: 
-                printProgressBar(i,total_iters-1)
+        for i in trange(total_iters):       
 
             ## Total power monitor ##
             self.totalpower[i] = overlap_nonu(u0,u0,weights)
@@ -708,12 +706,13 @@ class Prop3D:
             self._trimats(_trimatsx,_IORsq_,'x')
             self._trimats(_trimatsy,__IORsq.T,'y')
 
-            tri_solve_vec(_trimatsx[0],_trimatsx[1],_trimatsx[2],rmatx,gx,u0)
+            tri_solve_vecjl(_trimatsx[0],_trimatsx[1],_trimatsx[2],rmatx,gx,u0)
+
 
             self.rmat(rmaty,u0.T,_IORsq_.T,'y')
             self.rmat_pmlcorrect(rmaty,u0.T,'y')
 
-            tri_solve_vec(_trimatsy[0],_trimatsy[1],_trimatsy[2],rmaty,gy,u0.T)
+            tri_solve_vecjl(_trimatsy[0],_trimatsy[1],_trimatsy[2],rmaty,gy,u0.T)
 
             z__ = __z
             IORsq__[:,:] = __IORsq

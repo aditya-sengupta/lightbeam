@@ -1,17 +1,18 @@
-from hcipy.mode_basis.zernike import zernike
 import numpy as np
 import hcipy as hc
 import matplotlib.pyplot as plt
-from misc import normalize,resize,printProgressBar,resize2,overlap
-from os import path
 import time
-import LPmodes
 import h5py
-import screen
+
 from astropy.io import fits
+from hcipy.mode_basis.zernike import zernike as zk
+from os import path
+
+import screen
+import LPmodes
 import PIAA
 import PIAA_raytrace as RTPIAA
-import zernike as zk
+from misc import normalize, resize, overlap
 
 def get_u(wf:hc.Wavefront):
     '''extract 2D array of complex field data from hcipy wavefront object'''
@@ -26,7 +27,7 @@ def get_u(wf:hc.Wavefront):
 def get_phase(wf:hc.Wavefront):
     phase = wf.phase
     size = int(np.sqrt(phase.shape[0]))
-    shape=(size,size)
+    shape= (size,size)
     phase = phase.reshape(shape)
     return phase
 
@@ -78,8 +79,8 @@ class AOtele:
 
         keck_pupil_hires = np.array(fits.open("pupil_KECK_high_res.fits")[0].data,dtype=np.float32)[50:-50,50:-50]
 
-        ap_arr = resize2(keck_pupil_hires, (self.lo_pupil_res,self.lo_pupil_res) )
-        ap_arr_hires = resize2(keck_pupil_hires, (self.hi_pupil_res,self.hi_pupil_res) )
+        ap_arr = resize(keck_pupil_hires, (self.lo_pupil_res,self.lo_pupil_res) )
+        ap_arr_hires = resize(keck_pupil_hires, (self.hi_pupil_res,self.hi_pupil_res) )
         eps = 1e-6
         ap_arr[np.abs(ap_arr)<eps] = 0
         ap_arr_hires[np.abs(ap_arr_hires)<eps] = 0
@@ -300,8 +301,7 @@ class AOtele:
             probe_disp = 0.01 * self.wavelength
             slopes = []
 
-            for i in range(self.DM.num_actuators):
-                printProgressBar(i,self.DM.num_actuators)
+            for i in trange(self.DM.num_actuators):
 
                 slope = 0
 
@@ -514,7 +514,7 @@ class AOtele:
         print("simulating AO system...")
 
         j = 0
-        for i in range(len(t_arr)):
+        for i in trange(len(t_arr)):
             self.get_screen()
             self.update_DM(wf_pupil,leakage,gain)
 
@@ -536,7 +536,6 @@ class AOtele:
                 screens.append(self.current_phase_screen)
                 times.append(t_arr[i])
                 j += 1
-                printProgressBar(j,num_saves)
 
         avg/=j
         avg = np.sqrt(avg)
@@ -573,7 +572,7 @@ class AOtele:
             im.set_data(np.zeros(out_shape))
             return [im]
 
-        def update_fig(i):
+        def update_fig(i, pbar):
             for j in range(save_every):
                 self.get_screen()
                 self.update_DM(wf_pupil,leakage,gain)
@@ -583,11 +582,12 @@ class AOtele:
             psf = np.real(u*np.conj(u))
             im.set_data(np.sqrt(psf))
 
-            printProgressBar(i,num_saves)    
+            pbar.update(i)    
 
             return [im]
 
-        anim = FuncAnimation(fig, update_fig,init_func = init,frames=num_saves, blit=True)
+        with tqdm(total=num_saves) as pbar:
+            anim = FuncAnimation(fig, lambda i: update_fig(i, pbar),init_func = init,frames=num_saves, blit=True)
         anim.save('test.mp4', fps=60,extra_args=['-vcodec', 'libx264'])
         plt.show()
         
@@ -614,36 +614,37 @@ class AOtele:
         print("getting tip-tilt statistics...")
         
         j=0
-        for i in range(len(t_arr)):
-            self.get_screen()
-            self.update_DM(wf_pupil,leakage,gain)
+        with tqdm(total=num_saves) as pbar:
+            for i in range(len(t_arr)):
+                self.get_screen()
+                self.update_DM(wf_pupil,leakage,gain)
 
-            compute = (i!= 0 and i%save_every==0)
+                compute = (i!= 0 and i%save_every==0)
 
-            if compute:
-                self.DM_hires.actuators = self.DM.actuators
+                if compute:
+                    self.DM_hires.actuators = self.DM.actuators
 
-                ## get TT
-                _wf = self.propagate_through_turb(wf_pupil_hires,False)
-                _wf = self.DM_hires.forward(_wf)
-                if self.inject_TT is not None:
-                    _wf = self.inject_TT(_wf)
-                phase_cor = _wf.phase.reshape((self.hi_pupil_res,self.hi_pupil_res))
-                tip = zk.inner_product(phase_cor,ztip,ds)
-                tilt = zk.inner_product(phase_cor,ztilt,ds)
+                    ## get TT
+                    _wf = self.propagate_through_turb(wf_pupil_hires,False)
+                    _wf = self.DM_hires.forward(_wf)
+                    if self.inject_TT is not None:
+                        _wf = self.inject_TT(_wf)
+                    phase_cor = _wf.phase.reshape((self.hi_pupil_res,self.hi_pupil_res))
+                    tip = zk.inner_product(phase_cor,ztip,ds)
+                    tilt = zk.inner_product(phase_cor,ztilt,ds)
 
-                tips.append(tip)
-                tilts.append(tilt)
+                    tips.append(tip)
+                    tilts.append(tilt)
 
-                ## do an actual prop
-                _wf = self.propagate(wf_pupil_hires)
-                u = get_u(_wf)
-                us.append(u)
+                    ## do an actual prop
+                    _wf = self.propagate(wf_pupil_hires)
+                    u = get_u(_wf)
+                    us.append(u)
 
-                avg += np.real(u*np.conj(u))
+                    avg += np.real(u*np.conj(u))
 
-                j += 1
-                printProgressBar(j,num_saves)
+                    j += 1
+                    pbar.update(j)
 
         avg/=j
         avg = np.sqrt(avg)
