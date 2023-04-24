@@ -10,7 +10,8 @@ from mesh import RectMesh3D,RectMesh2D
 import optics
 from misc import timeit, overlap, normalize, overlap_nonu, norm_nonu,resize
 from tqdm.auto import tqdm, trange
-from tridiag_jl import tri_solve_vecjl
+from tridiag_jl import tri_solve_vec_b
+import psutil
 
 ### to do ###
 
@@ -371,7 +372,7 @@ class Prop3D:
             _b[ix] = self._bpmly[:,None]
             _c[ix] = self._cpmly[:,None]
 
-    @timeit 
+    # @timeit 
     def prop2end(self,_u,xyslice=None,zslice=None,u1_func=None,writeto=None,ref_val=5.e-6,remesh_every=20,dynamic_n0 = False,fplanewidth=0):
         mesh = self.mesh
         PML = mesh.PML
@@ -706,16 +707,17 @@ class Prop3D:
             self._trimats(_trimatsx,_IORsq_,'x')
             self._trimats(_trimatsy,__IORsq.T,'y')
 
-            tri_solve_vecjl(_trimatsx[0],_trimatsx[1],_trimatsx[2],rmatx,gx,u0)
+            tri_solve_vec(_trimatsx[0],_trimatsx[1],_trimatsx[2],rmatx,gx,u0)
 
 
             self.rmat(rmaty,u0.T,_IORsq_.T,'y')
             self.rmat_pmlcorrect(rmaty,u0.T,'y')
 
-            tri_solve_vecjl(_trimatsy[0],_trimatsy[1],_trimatsy[2],rmaty,gy,u0.T)
+            tri_solve_vec(_trimatsy[0],_trimatsy[1],_trimatsy[2],rmaty,gy,u0.T)
 
             z__ = __z
             IORsq__[:,:] = __IORsq
+            # tqdm.write(str(psutil.virtual_memory().percent))
   
         print("final total power",self.totalpower[-1])
         

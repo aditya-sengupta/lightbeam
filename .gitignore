@@ -132,4 +132,4 @@ dmypy.json
 .DS_Store
 
 # my data files
-data/trimats_*
+data/*.npy

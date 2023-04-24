@@ -15,8 +15,8 @@ def compute_port_power(ds,AMR=False,ref_val=2e-4,max_iters=5,remesh_every=50):
 
     # mesh 
     xw = 64 #um
-    yw= 64 #um
-    zw = 10000 #um
+    yw = 64 #um
+    zw = 1000 #um
     num_PML = int(4/ds) # number of cells
     dz = 1
 
@@ -60,6 +60,6 @@ def compute_port_power(ds,AMR=False,ref_val=2e-4,max_iters=5,remesh_every=50):
 
     return np.array(output_powers)
 
-# example of how to use
-output = compute_port_power(1/64,False)
-print(output)
+if __name__ == "__main__":
+    output = compute_port_power(1/4,True)
+    print(output)

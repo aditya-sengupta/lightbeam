@@ -6,6 +6,7 @@ from numpy import core
 import geom
 from typing import List
 from mesh import RectMesh2D
+from multiprocessing import Pool, get_context
 
 ### to do
 
@@ -188,6 +189,8 @@ class OpticSys(OpticPrim):
         yg = self.xymesh.yg if yg is None else yg
         bbox,bboxh = self.bbox_idx(z)
         out[bbox] = self.nb2*coeff
+        # with get_context("spawn").Pool(10) as p:
+        #    p.map(lambda e: OpticPrim.set_IORsq(e, out, z, coeff), [self.elmnts])
         for elmnt in self.elmnts:
             elmnt.set_IORsq(out,z,coeff)
         
@@ -250,16 +253,18 @@ class lant6_saval(OpticSys):
 
         core0 = scaled_cyl([0,0],rcore0,z_ex,ncore,nclad,z_offset,scale_func=scale_func,final_scale=final_scale)
         
-        core1 = scaled_cyl([offset0,0],rcore1,z_ex,ncore,nclad,z_offset,scale_func=scale_func,final_scale=final_scale)
-        core2 = scaled_cyl([offset0*np.cos(t),offset0*np.sin(t)],rcore1,z_ex,ncore,nclad,z_offset,scale_func=scale_func,final_scale=final_scale)
-        core3 = scaled_cyl([offset0*np.cos(2*t),offset0*np.sin(2*t)],rcore2,z_ex,ncore,nclad,z_offset,scale_func=scale_func,final_scale=final_scale)
-        core4 = scaled_cyl([offset0*np.cos(3*t),offset0*np.sin(3*t)],rcore2,z_ex,ncore,nclad,z_offset,scale_func=scale_func,final_scale=final_scale)
-        core5 = scaled_cyl([offset0*np.cos(4*t),offset0*np.sin(4*t)],rcore3,z_ex,ncore,nclad,z_offset,scale_func=scale_func,final_scale=final_scale)
+        radial_cores = [scaled_cyl(
+            [offset0 * np.cos(i*t), offset0 * np.sin(i*t)],
+            r, z_ex, ncore, nclad, z_offset,
+            scale_func=scale_func, final_scale=final_scale
+        )
+        for (i, r) in enumerate([rcore1, rcore1, rcore2, rcore2, rcore3])
+        ]
         
         clad = scaled_cyl([0,0],rclad,z_ex,nclad,njack,z_offset,scale_func=scale_func,final_scale=final_scale)
-        elmnts = [clad,core5,core4,core3,core2,core1,core0]
+        elmnts = [clad] + radial_cores + [core0]
         
-        super().__init__(elmnts,njack)
+        super().__init__(elmnts, njack)
 
 class lant19(OpticSys):
     '''19 port lantern, with cores hexagonally packed'''
