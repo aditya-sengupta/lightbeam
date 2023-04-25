@@ -1,12 +1,11 @@
 import numpy as np
-from numpy import logical_and as AND, logical_not as NOT
-from bisect import bisect_left,bisect_right
 
-from numpy import core
-import geom
+from bisect import bisect_left,bisect_right
 from typing import List
-from mesh import RectMesh2D
-from multiprocessing import Pool, get_context
+from numpy import logical_and as AND, logical_not as NOT
+
+from .geom import AA_circle_nonu
+from .mesh import RectMesh2D
 
 ### to do
 
@@ -113,9 +112,7 @@ class scaled_cyl(OpticPrim):
 
         def linear_func(_min,_max):
             slope =  (_max - _min)/self.z_ex
-            def _inner_(z):
-                return slope*(z-self.z_offset) + _min
-            return _inner_
+            return lambda z: slope * (z - self.z_offset) + _min
 
         if scale_func is None:
             scale_func = linear_func(1,final_scale)
@@ -159,7 +156,7 @@ class scaled_cyl(OpticPrim):
         rxg,ryg = np.meshgrid(m.rxa,m.rya,indexing='ij')
         dxg,dyg = np.meshgrid(m.dxa,m.dya,indexing='ij')
 
-        geom.AA_circle_nonu(out,xg,yg,xhg,yhg,center,self.r*scale,self.nb2*coeff,self.n2*coeff,bbox,rxg,ryg,dxg,dyg)
+        AA_circle_nonu(out,xg,yg,xhg,yhg,center,self.r*scale,self.nb2*coeff,self.n2*coeff,bbox,rxg,ryg,dxg,dyg)
     
 class OpticSys(OpticPrim):
     '''base class for optical systems, collections of primitives immersed in some background medium'''

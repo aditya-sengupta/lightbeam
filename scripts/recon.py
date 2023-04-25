@@ -46,7 +46,7 @@ for t in np.linspace(0, 100, 10):
 	atmosphere.evolve_until(t)
 	wf2 = atmosphere.forward(wf)
 	wf2.electric_field *= aperture
-	img = Field(prop(wf2).intensity, focal_grid)
+	img = Field(fprop(wf2).intensity, focal_grid)
 
 	plt.clf()
 	plt.subplot(1,2,1)

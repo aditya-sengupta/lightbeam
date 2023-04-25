@@ -14,7 +14,7 @@ fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
 }
 
 #[pyfunction]
-fn inv<'py>(py: Python<'py>, x: PyReadonlyArray2<'py, f64>, xi: PyArray2<f64>) -> PyResult<&'py PyArray2<f64>> {
+fn inv<'py>(py: Python<'py>, x: PyReadonlyArray2<'py, f64>) -> PyResult<&'py PyArray2<f64>> {
     let x = x.as_array();
     let y = x
         .inv()
@@ -24,7 +24,7 @@ fn inv<'py>(py: Python<'py>, x: PyReadonlyArray2<'py, f64>, xi: PyArray2<f64>) -
 
 /// A Python module implemented in Rust.
 #[pymodule]
-fn lightbeam(_py: Python, m: &PyModule) -> PyResult<()> {
+fn lightbeamrs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;
     m.add_function(wrap_pyfunction!(inv, m)?)?;
     Ok(())

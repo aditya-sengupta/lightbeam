@@ -3,7 +3,8 @@
 #
 #    maturin generate-ci github
 #
-name: CI
+# I don't want CI right now: change the file name and the "name" field back to CI.yml and CI respectively if we ever do
+name: ignore_me
 
 on:
   push:

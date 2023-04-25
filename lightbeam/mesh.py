@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from itertools import chain
 from bisect import bisect_left
 import numexpr as ne
-import math
+from math import ceil
 
 ## to do
 
@@ -78,8 +78,8 @@ class RectMesh2D:
         self.rfacya = self.rfacya0 = np.full(yres-1,1)
 
     def snapto(self,xw,yw):
-        xwr = 2*math.ceil(xw/2/self.dx0)
-        ywr = 2*math.ceil(yw/2/self.dy0)
+        xwr = 2*ceil(xw/2/self.dx0)
+        ywr = 2*ceil(yw/2/self.dy0)
 
         #round
         xw = xwr*self.dx0
@@ -265,8 +265,31 @@ class RectMesh2D:
             u0 = self.refine_by_two(u0,ucrit)
 
 class RectMesh3D:
+    """
+    To initialize a mesh, we use the RectMesh3D class. The required args are:
+
+    xw: total width of the simulation zone in the x direction.
+    yw: total width in the y direction.
+    zw: total length in the z direction.
+    ds: coarsest grid spacing in the transverse (x,y) plane. 
+    Note that this grid can later be subdivided for greater accuracy.
+    dz: grid spacing along the z direction.
+
+    (optional)
+
+    PML: the number of extra grid points to be padded around the 
+    simulation zone (specifically in the xy direction). The conductivity of this outer 
+    zone will be tuned to damp any outgoing waves, reducing reflection across the simulation boundary. 
+    The specific technique used is called "perfectly matched 
+    layers" (PML) . Note that to maintain consistency in simulations, PML should 
+    scale as 1/ds, so that the physical size of the PML zone remains consistent.
+
+    PML reference: Ginés Lifante Pedrola, "Beam Propagation Method for Design of Optical Waveguide Devices," Wiley (2015).
+
+    xwfunc, ywfunc: these are functions which take in a z value and return a value for xw,yw. This allows the simulation zone to change in size, which is theoretically useful in simulating tapered waveguides. However, this option is not well tested yet. Leave these parameters as None to leave xw,yw fixed.
+    """
     def __init__(self,xw,yw,zw,ds,dz,PML=4,xwfunc=None,ywfunc=None):
-        '''base is a uniform mesh. can be refined'''
+        # base is a uniform mesh. can be refined
         self.xw,self.yw,self.zw = xw,yw,zw
         self.ds,self.dz = ds,dz
         self.xres,self.yres,self.zres = round(xw/ds)+1+2*PML, round(yw/ds)+1+2*PML, round(zw/dz)+1
@@ -281,12 +304,12 @@ class RectMesh3D:
         if xwfunc is None:
             xy_xw = xw
         else:
-            xy_xw = 2*math.ceil(xwfunc(0)/2/ds)*ds
+            xy_xw = 2*ceil(xwfunc(0)/2/ds)*ds
         
         if ywfunc is None:
             xy_yw = yw
         else:
-            xy_yw = 2*math.ceil(ywfunc(0)/2/ds)*ds
+            xy_yw = 2*ceil(ywfunc(0)/2/ds)*ds
             
         self.xy = RectMesh2D(xy_xw,xy_yw,ds,ds,PML)
 
@@ -299,8 +322,7 @@ class RectMesh3D:
         self.xwfunc = xwfunc
         self.ywfunc = ywfunc
     
-    def get_loc(self ):
-
+    def get_loc(self):
         xy = self.xy
         ix0 = bisect_left(self.xa,xy.xm-TOL)
         ix1 = bisect_left(self.xa,xy.xM-TOL)

@@ -1,17 +1,20 @@
 ''' bunch of miscellaneous functions that I didn't know where to put'''
 
 import numpy as np
+from numpy import complex128 as c128
 from bisect import bisect_left
-import time
 from scipy.interpolate import RectBivariateSpline
+
+def genc(shape):
+    return np.empty(shape,dtype=c128,order='F')
 
 def getslices(bounds,arr):
     '''given a range, get the idxs corresponding to that range in the sorted array arr '''
-    if len(bounds)==0:
+    if len(bounds) == 0:
         return np.s_[0:0]
-    elif len(bounds)==1:
+    elif len(bounds) == 1:
         return np.s_[bisect_left(arr,bounds[0])]
-    elif len(bounds)==2:
+    elif len(bounds) == 2:
         return np.s_[bisect_left(arr,bounds[0]):bisect_left(arr,bounds[1])+1]
     else:
         raise Exception("malformed bounds input in getslices(); check savex,savey,savez in config.py")
@@ -43,19 +46,7 @@ def norm_nonu(u0,weights,normval = 1):
     return u0
 
 def timeit(method):
-    '''pulled from someone's github or something. can't find it anymore'''
-    def timed(*args, **kw):
-        ts = time.time()
-        result = method(*args, **kw)
-        te = time.time()
-        if 'log_time' in kw:
-            name = kw.get('log_name', method.__name__.upper())
-            kw['log_time'][name] = int((te - ts))
-        else:
-            print('%r  %2.4f s' % \
-                  (method.__name__, (te - ts)))
-        return result
-    return timed
+    raise Exception("use ipython's %timeit line magic")
 
 def gauss(xg,yg,theta,phi,sigu,sigv,k0,x0=0,y0=0.):
     '''tilted gaussian beam'''

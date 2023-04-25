@@ -1,17 +1,18 @@
 
 import numpy as np
+import numexpr as ne
+import os
+
 from numpy import exp,dot,full,cos,sin,real,imag,power,pi,log,sqrt,roll,linspace,arange,transpose,pad,complex128 as c128, float32 as f32, float64 as f64
 from numba import njit,jit,complex128 as nbc128, void
-import os
+from tqdm.auto import tqdm, trange
 os.environ['NUMEXPR_MAX_THREADS'] = '16'
 os.environ['NUMEXPR_NUM_THREADS'] = '8'
-import numexpr as ne
-from mesh import RectMesh3D,RectMesh2D
-import optics
-from misc import timeit, overlap, normalize, overlap_nonu, norm_nonu,resize
-from tqdm.auto import tqdm, trange
-from tridiag_jl import tri_solve_vec_b
-import psutil
+
+from .mesh import RectMesh3D, RectMesh2D
+from .optics import OpticSys
+from .misc import overlap, normalize, overlap_nonu, norm_nonu, resize, genc
+# from .tridiag_jl import tri_solve_vec_b
 
 ### to do ###
 
@@ -34,12 +35,6 @@ import psutil
 # remove unused functions
 # move all the eval strings somewhere else (together)
 
-def genc(shape):
-    return np.empty(shape,dtype=c128,order='F')
-
-def genf(shape):
-    return np.empty(shape,dtype=c128,order='F')
-
 @njit(void(nbc128[:,:],nbc128[:,:],nbc128[:,:],nbc128[:,:],nbc128[:,:],nbc128[:,:]))
 def tri_solve_vec(a,b,c,r,g,u):
     '''Apply Thomas' method for simultaneously solving a set of tridagonal systems. a, b, c, and r are matrices
@@ -60,7 +55,7 @@ def tri_solve_vec(a,b,c,r,g,u):
 
 class Prop3D:
     '''beam propagator. employs finite-differences beam propagation with PML as the boundary condition. works on an adaptive mesh'''
-    def __init__(self,wl0,mesh:RectMesh3D,optical_system:optics.OpticSys,n0):
+    def __init__(self, wl0, mesh:RectMesh3D, optical_system:OpticSys, n0):
         
         xymesh = mesh.xy
 
