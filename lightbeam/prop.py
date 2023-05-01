@@ -12,7 +12,6 @@ os.environ['NUMEXPR_NUM_THREADS'] = '8'
 from .mesh import RectMesh3D, RectMesh2D
 from .optics import OpticSys
 from .misc import overlap, normalize, overlap_nonu, norm_nonu, resize, genc
-# from .tridiag_jl import tri_solve_vec_b
 
 ### to do ###
 
@@ -151,9 +150,9 @@ class Prop3D:
     def check_z_inv(self):
         return self.optical_system.z_invariant
 
-    def set_IORsq(self,out,z,xg=None,yg=None):
+    def set_IORsq(self, out, z):
         #premultiply by k02 so we don't have to keep doing it later
-        self.optical_system.set_IORsq(out,z,xg,yg,coeff=self.k02)
+        self.optical_system.set_IORsq(out,z,coeff=self.k02)
 
     def calculate_PML_mats(self):
         '''As per textbook <Beam Propagation Method for Design of Optical Waveguide Devices> , 

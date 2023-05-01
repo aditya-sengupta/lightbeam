@@ -188,17 +188,3 @@ def AA_circle(out,xg,yg,xgh,ygh,center,R,n0,n1,ds,where):
     area = pixwt(center[0]/ds,center[1]/ds,R/ds,x0/ds,y0/ds)
     newvals = n1*area+n0*(1-area)
     out[where][mask_b] = newvals
-
-
-
-
-
-
-
-
-
-
-
-
-
-    

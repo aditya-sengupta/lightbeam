@@ -1,4 +1,5 @@
 import numpy as np
+from matplotlib import pyplot as plt
 
 from bisect import bisect_left,bisect_right
 from typing import List
@@ -164,6 +165,10 @@ class OpticSys(OpticPrim):
         self.elmnts = elmnts
         self.nb = nb
         self.nb2 = nb*nb
+        self.vr = (
+            min([x.nb2 for x in elmnts]),
+            max([x.n for x in elmnts]) ** 2
+        )
     
     def _bbox(self,z):
         '''default behavior. won't work if the system has disjoint pieces'''
@@ -180,16 +185,23 @@ class OpticSys(OpticPrim):
         for elmnt in self.elmnts:
             elmnt.set_sampling(xymesh)
 
-    def set_IORsq(self,out,z,xg=None,yg=None,coeff=1):
+    def set_IORsq(self,out,z,coeff=1):
         '''replace values of out with IOR^2, given coordinate grids xg, yg, and z location.'''
-        xg = self.xymesh.xg if xg is None else xg
-        yg = self.xymesh.yg if yg is None else yg
         bbox,bboxh = self.bbox_idx(z)
         out[bbox] = self.nb2*coeff
         # with get_context("spawn").Pool(10) as p:
         #    p.map(lambda e: OpticPrim.set_IORsq(e, out, z, coeff), [self.elmnts])
         for elmnt in self.elmnts:
             elmnt.set_IORsq(out,z,coeff)
+
+    def show_cross_section(self, z, out=None, coeff=1):
+        if out is None:
+            out = np.zeros(self.xymesh.shape)
+        self.set_IORsq(out, z, coeff)
+
+        plt.imshow(out, vmin=self.vr[0], vmax=self.vr[1])
+        plt.show()
+
         
 class lant5(OpticSys):
     '''corrigan et al. 2018 style photonic lantern'''

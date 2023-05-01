@@ -131,6 +131,8 @@ def lpfield(xg,yg,l,m,a,wl0,ncore,nclad,which = "cos"):
     V = get_V(2*np.pi/wl0,a,ncore,nclad)
     rs = np.sqrt(np.power(xg,2) + np.power(yg,2))
     b = get_b(l,m,V)
+    if np.isnan(b):
+        b = 0.001
 
     #print(np.sqrt(nclad**2+b*(ncore**2-nclad**2)))
 
