@@ -1,14 +1,15 @@
 ''' bunch of miscellaneous functions that I didn't know where to put'''
 
 import numpy as np
-from numpy import complex128 as c128
+
 from bisect import bisect_left
+from numpy import complex128 as c128
 from scipy.interpolate import RectBivariateSpline
 
 def genc(shape):
     return np.empty(shape,dtype=c128,order='F')
 
-def getslices(bounds,arr):
+def getslices(bounds, arr):
     '''given a range, get the idxs corresponding to that range in the sorted array arr '''
     if len(bounds) == 0:
         return np.s_[0:0]
@@ -19,7 +20,7 @@ def getslices(bounds,arr):
     else:
         raise Exception("malformed bounds input in getslices(); check savex,savey,savez in config.py")
 
-def resize(image,newshape):
+def resize(image, newshape):
     '''another resampling function that uses scipy, not cv2'''
     xpix = np.arange(image.shape[0])
     ypix = np.arange(image.shape[1])
@@ -29,18 +30,18 @@ def resize(image,newshape):
 
     return RectBivariateSpline(xpix,ypix,image)(xpix_new,ypix_new)
 
-def overlap(u1,u2,weight=1):
+def overlap(u1, u2, weight=1):
     return weight*np.abs(np.sum(np.conj(u2)*u1))
 
-def overlap_nonu(u1,u2,weights):
+def overlap_nonu(u1, u2, weights):
     return np.abs(np.sum(weights*np.conj(u2)*u1))
 
-def normalize(u0,weight=1,normval = 1):
+def normalize(u0, weight=1, normval = 1):
     norm = np.sqrt(normval/overlap(u0,u0,weight))
     u0 *= norm
     return u0
 
-def norm_nonu(u0,weights,normval = 1):
+def norm_nonu(u0, weights, normval = 1):
     norm = np.sqrt(normval/overlap_nonu(u0,u0,weights))
     u0 *= norm
     return u0
@@ -63,7 +64,7 @@ def read_rsoft(fname):
     field = (reals+1.j*imags).T
     return field.astype(np.complex128)
 
-def write_rsoft(fname,u0,xw,yw):
+def write_rsoft(fname, u0, xw, yw):
     '''save field to a file format useable by rsoft'''
     out = np.empty((u0.shape[0]*2,u0.shape[1]))
     reals = np.real(u0)

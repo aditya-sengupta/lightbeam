@@ -1,12 +1,15 @@
 import numpy as np
 from matplotlib import pyplot as plt
 
-from bisect import bisect_left,bisect_right
-from typing import List
+from bisect import bisect_left, bisect_right
+from functools import partial
+from itertools import repeat
 from numpy import logical_and as AND, logical_not as NOT
+from typing import List
 
 from .geom import AA_circle_nonu
 from .mesh import RectMesh2D
+from .LPmodes import get_num_modes
 
 ### to do
 
@@ -23,7 +26,7 @@ class OpticPrim:
     
     z_invariant = False
     
-    def __init__(self,n):
+    def __init__(self, n):
 
         self.n = n
         self.n2 = n*n
@@ -53,8 +56,10 @@ class OpticPrim:
         jmax = min(bisect_left(ya,ymax)+1,len(ya))
         return np.s_[imin:imax,jmin:jmax], np.s_[imin:imax+1,jmin:jmax+1]
     
-    def set_sampling(self,xymesh:RectMesh2D):
+    def set_sampling(self, xymesh:RectMesh2D):
         self.xymesh = xymesh
+        self.rxg, self.ryg = np.meshgrid(xymesh.rxa, xymesh.rya, indexing='ij')
+        self.dxg, self.dyg = np.meshgrid(xymesh.dxa, xymesh.dya, indexing='ij')
 
     def set_IORsq(self,out,z,coeff=1):
         ''' replace values of out with IOR^2, given coordinate grids xg, yg, and z location. 
@@ -75,12 +80,19 @@ class OpticPrim:
         ''' given z, get mask which will select pixels that lie on top of the primitive boundary
             you must set the sampling first before you call this!'''
         
-        xhg,yhg = self.xymesh.xhg,self.xymesh.yhg
+        xhg, yhg = self.xymesh.xhg, self.xymesh.yhg
         maskh = self._contains(xhg,yhg,z)
-        mask_r = (NOT ( AND(AND(maskh[1:,1:] == maskh[:-1,1:], maskh[1:,1:] == maskh[1:,:-1]),maskh[:-1,:-1]==maskh[:-1,1:])))
-        return mask_r
+        return NOT(
+            AND(
+                AND(
+                    maskh[1:,1:] == maskh[:-1,1:],
+                    maskh[1:,1:] == maskh[1:,:-1]
+                ),
+                maskh[:-1,:-1]==maskh[:-1,1:]
+            )
+        )
 
-class scaled_cyl(OpticPrim):
+class ScaledCyl(OpticPrim):
     ''' cylinder whose offset from origin and radius scale in the same way'''
     def __init__(self,xy,r,z_ex,n,nb,z_offset=0,scale_func=None,final_scale=1):
         ''' Initialize a scaled cylinder, where the cross-sectional geometry along the object's 
@@ -139,7 +151,7 @@ class scaled_cyl(OpticPrim):
         ymax = yc+scale*self.r
         ymin = yc-scale*self.r
         return (xmin,xmax,ymin,ymax)
-    
+
     def set_IORsq(self,out,z,coeff=1):
         '''overwrite base function to incorporate anti-aliasing and improve convergence'''
         if not (self.z_offset <= z <= self.z_offset+self.z_ex):
@@ -147,42 +159,38 @@ class scaled_cyl(OpticPrim):
 
         center = (self.xoffset_func(z),self.yoffset_func(z))
         scale = self.scale_func(z)
-        bbox,bboxh = self.bbox_idx(z)  
+        bbox, bboxh = self.bbox_idx(z)  
         xg = self.xymesh.xg[bbox]
         yg = self.xymesh.yg[bbox]
         xhg = self.xymesh.xhg[bboxh]
         yhg = self.xymesh.yhg[bboxh]
 
-        m = self.xymesh
-        rxg,ryg = np.meshgrid(m.rxa,m.rya,indexing='ij')
-        dxg,dyg = np.meshgrid(m.dxa,m.dya,indexing='ij')
-
-        AA_circle_nonu(out,xg,yg,xhg,yhg,center,self.r*scale,self.nb2*coeff,self.n2*coeff,bbox,rxg,ryg,dxg,dyg)
+        AA_circle_nonu(out,xg,yg,xhg,yhg,center,self.r*scale,self.nb2*coeff,self.n2*coeff,bbox,self.rxg,self.ryg,self.dxg,self.dyg)
     
 class OpticSys(OpticPrim):
     '''base class for optical systems, collections of primitives immersed in some background medium'''
-    def __init__(self,elmnts:List[OpticPrim],nb):
-        self.elmnts = elmnts
+    def __init__(self,elements:List[OpticPrim], nb):
+        self.elements = elements
         self.nb = nb
         self.nb2 = nb*nb
         self.vr = (
-            min([x.nb2 for x in elmnts]),
-            max([x.n for x in elmnts]) ** 2
+            min([x.nb2 for x in elements]),
+            max([x.n for x in elements]) ** 2
         )
     
     def _bbox(self,z):
         '''default behavior. won't work if the system has disjoint pieces'''
-        if len(self.elmnts)==0:
+        if len(self.elements) == 0:
             return super()._bbox(z)
-        return self.elmnts[0]._bbox(z)
+        return self.elements[0]._bbox(z)
     
     def _contains(self,x,y,z):
-        return self.elmnts[0]._contains(x,y,z)
+        return self.elements[0]._contains(x,y,z)
 
     def set_sampling(self,xymesh:RectMesh2D):
         '''this function sets the spatial sampling for IOR computaitons'''
         super().set_sampling(xymesh)
-        for elmnt in self.elmnts:
+        for elmnt in self.elements:
             elmnt.set_sampling(xymesh)
 
     def set_IORsq(self,out,z,coeff=1):
@@ -190,8 +198,8 @@ class OpticSys(OpticPrim):
         bbox,bboxh = self.bbox_idx(z)
         out[bbox] = self.nb2*coeff
         # with get_context("spawn").Pool(10) as p:
-        #    p.map(lambda e: OpticPrim.set_IORsq(e, out, z, coeff), [self.elmnts])
-        for elmnt in self.elmnts:
+        #    p.map(lambda e: OpticPrim.set_IORsq(e, out, z, coeff), [self.elements])
+        for elmnt in self.elements:
             elmnt.set_IORsq(out,z,coeff)
 
     def show_cross_section(self, z, out=None, coeff=1):
@@ -202,121 +210,106 @@ class OpticSys(OpticPrim):
         plt.imshow(out, vmin=self.vr[0], vmax=self.vr[1])
         plt.show()
 
-        
-class lant5(OpticSys):
-    '''corrigan et al. 2018 style photonic lantern'''
-    def __init__(self,rcore,rclad,rjack,ncore,nclad,njack,offset0,z_ex,scale_func=None,final_scale=1,nb=1):
-        core0 = scaled_cyl([0,0],rcore,z_ex,ncore,nclad,scale_func=scale_func,final_scale=final_scale)
-        core1 = scaled_cyl([offset0,0],rcore,z_ex,ncore,nclad,scale_func=scale_func,final_scale=final_scale)
-        core2 = scaled_cyl([0,offset0],rcore,z_ex,ncore,nclad,scale_func=scale_func,final_scale=final_scale)
-        core3 = scaled_cyl([-offset0,0],rcore,z_ex,ncore,nclad,scale_func=scale_func,final_scale=final_scale)
-        core4 = scaled_cyl([0,-offset0],rcore,z_ex,ncore,nclad,scale_func=scale_func,final_scale=final_scale)
-        clad = scaled_cyl([0,0],rclad,z_ex,nclad,njack,scale_func=scale_func,final_scale=final_scale)
-        jack = scaled_cyl([0,0],rjack,z_ex,njack,nb,scale_func=scale_func,final_scale=final_scale)
-        elmnts = [jack,clad,core4,core3,core2,core1,core0]
-        
-        super().__init__(elmnts,nb)
-
-class lant5big(OpticSys):
-    '''corrigan et al. 2018 style photonic lantern except the jacket is infinite'''
-    def __init__(self,rcore,rclad,ncore,nclad,njack,offset0,z_ex,scale_func=None,final_scale=1):
-        core0 = scaled_cyl([0,0],rcore,z_ex,ncore,nclad,scale_func=scale_func,final_scale=final_scale)
-        core1 = scaled_cyl([offset0,0],rcore,z_ex,ncore,nclad,scale_func=scale_func,final_scale=final_scale)
-        core2 = scaled_cyl([0,offset0],rcore,z_ex,ncore,nclad,scale_func=scale_func,final_scale=final_scale)
-        core3 = scaled_cyl([-offset0,0],rcore,z_ex,ncore,nclad,scale_func=scale_func,final_scale=final_scale)
-        core4 = scaled_cyl([0,-offset0],rcore,z_ex,ncore,nclad,scale_func=scale_func,final_scale=final_scale)
-        clad = scaled_cyl([0,0],rclad,z_ex,nclad,njack,scale_func=scale_func,final_scale=final_scale)
-        elmnts = [clad,core4,core3,core2,core1,core0]
-        
-        super().__init__(elmnts,njack)
-
-class lant3big(OpticSys):
-    '''3 port lantern, infinite jacket'''
-    def __init__(self,rcore,rclad,ncore,nclad,njack,offset0,z_ex,z_offset=0,scale_func=None,final_scale=1):
-        core0 = scaled_cyl([0,offset0],rcore,z_ex,ncore,nclad,z_offset,scale_func=scale_func,final_scale=final_scale)
-        core1 = scaled_cyl([-np.sqrt(3)/2*offset0,-offset0/2],rcore,z_ex,ncore,nclad,z_offset,scale_func=scale_func,final_scale=final_scale)
-        core2 = scaled_cyl([np.sqrt(3)/2*offset0,-offset0/2],rcore,z_ex,ncore,nclad,z_offset,scale_func=scale_func,final_scale=final_scale)
-        clad = scaled_cyl([0,0],rclad,z_ex,nclad,njack,z_offset,scale_func=scale_func,final_scale=final_scale)
-        elmnts = [clad,core2,core1,core0]
-        
-        super().__init__(elmnts,njack)
-
-        self.init_core_locs = np.array([[0,offset0],[-np.sqrt(3)/2*offset0,-offset0/2],[np.sqrt(3)/2*offset0,-offset0/2]])
-        self.final_core_locs = self.init_core_locs*final_scale
-
-class lant3_ms(OpticSys):
-    '''3 port lantern, infinite jacket, one core is bigger than the rest to accept LP01 mode.'''
-    def __init__(self,rcore1,rcore2,rclad,ncore,nclad,njack,offset0,z_ex,z_offset=0,scale_func=None,final_scale=1):
-        core0 = scaled_cyl([0,offset0],rcore1,z_ex,ncore,nclad,z_offset,scale_func=scale_func,final_scale=final_scale)
-        core1 = scaled_cyl([-np.sqrt(3)/2*offset0,-offset0/2],rcore2,z_ex,ncore,nclad,z_offset,scale_func=scale_func,final_scale=final_scale)
-        core2 = scaled_cyl([np.sqrt(3)/2*offset0,-offset0/2],rcore2,z_ex,ncore,nclad,z_offset,scale_func=scale_func,final_scale=final_scale)
-        clad = scaled_cyl([0,0],rclad,z_ex,nclad,njack,z_offset,scale_func=scale_func,final_scale=final_scale)
-        elmnts = [clad,core2,core1,core0]
-        super().__init__(elmnts,njack)
-
-class lant6_saval(OpticSys):
-    '''6 port lantern, mode-selective, based off sergio leon-saval's paper'''
-    def __init__(self,rcore0,rcore1,rcore2,rcore3,rclad,ncore,nclad,njack,offset0,z_ex,z_offset=0,scale_func=None,final_scale=1):
-        
-        t = 2*np.pi/5
-
-        core0 = scaled_cyl([0,0],rcore0,z_ex,ncore,nclad,z_offset,scale_func=scale_func,final_scale=final_scale)
-        
-        radial_cores = [scaled_cyl(
-            [offset0 * np.cos(i*t), offset0 * np.sin(i*t)],
-            r, z_ex, ncore, nclad, z_offset,
-            scale_func=scale_func, final_scale=final_scale
+class Lantern(OpticSys):
+    """A general photonic lantern, i.e. a number of SMF ports in a common cladding."""
+    def __init__(self, port_positions, port_radii, rclad, rjack, z_ex, nvals, **kwargs):
+        scale_func = kwargs.get("scale_func", None)
+        final_scale = kwargs.get("final_scale", 1)
+        nb = kwargs.get("nb", 1)
+        ncore, nclad, njack = nvals
+        elements = []
+        self.core_idxs = []
+        # define jack and cladding
+        # if the jacket is large enough, make an optical element for it
+        if rjack > rclad:
+            elements.append(
+                ScaledCyl([0.0, 0.0], rjack, z_ex, njack, 1, scale_func=scale_func, final_scale=final_scale)
+            )
+        else:
+            # otherwise, use an infinite jacket
+            nb = njack
+            
+        # cladding
+        elements.append(
+            ScaledCyl([0.0, 0.0], rclad, z_ex, nclad, njack, scale_func=scale_func, final_scale=final_scale)
         )
-        for (i, r) in enumerate([rcore1, rcore1, rcore2, rcore2, rcore3])
-        ]
-        
-        clad = scaled_cyl([0,0],rclad,z_ex,nclad,njack,z_offset,scale_func=scale_func,final_scale=final_scale)
-        elmnts = [clad] + radial_cores + [core0]
-        
-        super().__init__(elmnts, njack)
 
-class lant19(OpticSys):
-    '''19 port lantern, with cores hexagonally packed'''
+        if not(type(port_radii) in (list, np.ndarray)):
+            port_radii = repeat(port_radii)
 
-    def __init__(self,rcore,rclad,ncore,nclad,njack,core_spacing,z_ex,z_offset=0,scale_func=None,final_scale=1):
-        
-        core_locs = self.get_19port_positions(core_spacing)
-        self.core_locs = core_locs
-        clad = scaled_cyl([0,0],rclad,z_ex,nclad,njack,z_offset,scale_func=scale_func,final_scale=final_scale)
-        elmnts = [clad]
+        for (port, rcore) in zip(port_positions, port_radii):
+            self.core_idxs.append(len(elements))
+            # define SMF cores
+            elements.append(
+                ScaledCyl(port, rcore, z_ex, ncore, nclad, scale_func=scale_func, final_scale=final_scale)
+            )
 
-        for loc in core_locs:
-            core = scaled_cyl(loc,rcore,z_ex,ncore,nclad,z_offset,scale_func=scale_func,final_scale=final_scale)
-            elmnts.append(core)
-        super().__init__(elmnts,njack)
-        
-    @staticmethod
-    def get_19port_positions(core_spacing,plot=False):
-        pos= [[0,0]]
+        super().__init__(elements, nb)
+        self.init_core_locs = np.array(port_positions)
+        self.final_core_locs = self.init_core_locs * final_scale
 
-        for i in range(6):
-            xpos = core_spacing*np.cos(i*np.pi/3)
-            ypos = core_spacing*np.sin(i*np.pi/3)
-            pos.append([xpos,ypos])
-        
-        startpos = np.array([2*core_spacing,0])
-        startang = 2*np.pi/3
-        pos.append(startpos)
-        for i in range(11):
-            if i%2==0 and i!=0:
-                startang += np.pi/3
-            nextpos = startpos + np.array([core_spacing*np.cos(startang),core_spacing*np.sin(startang)])
-            pos.append(nextpos)
-            startpos = nextpos
+    def check_smfs(self, k0):
+        return list(
+            map(
+                lambda el: get_num_modes(k0, el.r, el.n, np.sqrt(el.nb2)), 
+                map(
+                    lambda i: self.elements[i], 
+                    self.core_idxs
+                )
+            )
+        )
 
-        pos = np.array(pos)
-        if not plot:
-            return pos
-        
-        import matplotlib.pyplot as plt
+def make_lant5(offset0, *args, **kwargs):
+    positions = [[0,-offset0], [-offset0,0], [0,offset0], [offset0,0], [0,0]]
+    return Lantern(positions, *args, **kwargs)
 
-        for p in pos:
-            plt.plot(*p,marker='.',ms=10,color='k')
-        
-        plt.axis('equal')
-        plt.show()
+def make_lant5big(offset0, *args, **kwargs):
+    positions = [[0,-offset0], [-offset0,0], [0,offset0], [offset0,0], [0,0]]
+    return Lantern(positions, *args, **kwargs)
+
+def make_lant3big(offset0, *args, **kwargs):
+    positions = [[np.sqrt(3)/2*offset0,-offset0/2], [-np.sqrt(3)/2*offset0,-offset0/2], [0,offset0]]
+    return Lantern(positions, *args, **kwargs)
+
+def make_lant3ms(offset0, port_radii, *args, **kwargs):
+    positions = [[np.sqrt(3)/2*offset0,-offset0/2], [-np.sqrt(3)/2*offset0,-offset0/2], [0,offset0]]
+    if len(port_radii) == 2:
+        port_radii = [port_radii[1], port_radii[1], port_radii[0]]
+    else:
+        port_radii.reverse()
+
+    return Lantern(positions, port_radii, *args, **kwargs)
+
+def make_lant6_saval(offset0, port_radii, *args, **kwargs):
+    '''6 port lantern, mode-selective, based off sergio leon-saval's paper'''
+    t = 2 * np.pi / 5
+    positions = [[offset0 * np.cos(i*t), offset0 * np.sin(i*t)] for i in range(5)] + [[0,0]]
+    if type(port_radii) in (float, int):
+        port_radii = list(repeat(port_radii, 6))
+    if len(port_radii) == 4:
+        port_radii = [port_radii[x] for x in [1, 1, 2, 2, 3, 0]]
+    else:
+        port_radii = port_radii[1:] + [port_radii[0]] # move the core to the end
+
+    return Lantern(positions, port_radii, *args, **kwargs)
+
+def make_lant19(core_spacing, *args, **kwargs):
+    positions = [[0,0]]
+
+    for i in range(6):
+        xpos = core_spacing*np.cos(i*np.pi/3)
+        ypos = core_spacing*np.sin(i*np.pi/3)
+        positions.append([xpos,ypos])
+    
+    startpos = np.array([2*core_spacing,0])
+    startang = 2*np.pi/3
+    pos.append(startpos)
+    for i in range(11):
+        if i%2==0 and i!=0:
+            startang += np.pi/3
+        nextpos = startpos + np.array([core_spacing*np.cos(startang),core_spacing*np.sin(startang)])
+        pos.append(nextpos)
+        startpos = nextpos
+
+    return Lantern(pos, *args, **kwargs)
+

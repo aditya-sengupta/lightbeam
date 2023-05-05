@@ -19,10 +19,7 @@ def Z_rad(n,m):
     coeffs = np.power(-1,indices) * factorial(n-indices) / factorial(indices) / factorial( int((n+m)/2) - indices ) / factorial( int((n-m)/2) - indices)
     powers = n - 2 * indices
 
-    def _inner_(r):
-        return np.sum( coeffs[:,None,None] * np.power( np.repeat([r],len(powers),axis=0) , powers[:,None,None] ) , axis = 0 )
-
-    return _inner_
+    return lambda r: np.sum( coeffs[:,None,None] * np.power( np.repeat([r],len(powers),axis=0) , powers[:,None,None] ) , axis = 0 )
 
 def Z_az(n,m):
     """azimuthal component of Zernike mode"""

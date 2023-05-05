@@ -1,4 +1,6 @@
 import numpy as np
+
+from itertools import count
 from numpy.lib import scimath
 from scipy.special import jn_zeros, jn, kn, jv, kv
 from scipy.optimize import brentq
@@ -50,7 +52,6 @@ def get_modes(V):
     return modes
 
 def get_mode_cutoffs(l, mmax):
-    from scipy.special import jn_zeros
     if l > 0:
         return jn_zeros(l-1, mmax)
     else:
@@ -66,7 +67,6 @@ def findBetween(solve_fn, lowbound, highbound, args=(), maxj=10):
     if s[0] == 0.: return lowbound
     if s[1] == 0.: return highbound
 
-    from itertools import count
     for j in count():  # probably not needed...
         if j == maxj:
             print("findBetween: max iter reached")
@@ -158,23 +158,22 @@ def get_IOR(wl):
     wl2 = wl*wl
     return np.sqrt(0.6961663 * wl2 / (wl2 - 0.0684043**2) + 0.4079426 * wl2 / (wl2 - 0.1162414**2) + 0.8974794 * wl2 / (wl2 - 9.896161**2) + 1)
 
-
 def get_num_modes(k0,rcore,ncore,nclad):
     V = get_V(k0,rcore,ncore,nclad)
     modes = get_modes(V)
     num = 0
     for mode in modes:
-        if mode[0]==0:
-            num+=1
+        if mode[0] == 0:
+            num += 1
         else:
-            num+=2
+            num += 2
     return num
 
-def get_all_bs(l, V,bmax):
+def get_all_bs(l, V, bmax):
 
     def solve_fn(b,V):
-        v = V*scimath.sqrt(b)
-        u = V*scimath.sqrt(1.-b)
+        v = V * scimath.sqrt(b)
+        u = V * scimath.sqrt(1.-b)
 
         if l == 0:
             return np.abs(u * jv(1, u) * kv(0, v) - v * jv(0, u) * kv(1, v))

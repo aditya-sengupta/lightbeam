@@ -157,6 +157,7 @@ class RectMesh2D:
         self.xhg,self.yhg = xhg,yhg
 
         self.shape = (len(new_xa),len(new_ya))
+        # dinosaur
 
     def get_weights(self):
         xhg,yhg = self.xhg,self.yhg

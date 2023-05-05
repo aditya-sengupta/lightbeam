@@ -1,10 +1,9 @@
-
 import numpy as np
 import numexpr as ne
 import os
 
-from numpy import exp,dot,full,cos,sin,real,imag,power,pi,log,sqrt,roll,linspace,arange,transpose,pad,complex128 as c128, float32 as f32, float64 as f64
-from numba import njit,jit,complex128 as nbc128, void
+from numpy import complex128 as c128, float32 as f32, float64 as f64
+from numba import njit, jit,complex128 as nbc128, void
 from tqdm.auto import tqdm, trange
 os.environ['NUMEXPR_MAX_THREADS'] = '16'
 os.environ['NUMEXPR_NUM_THREADS'] = '8'
@@ -59,7 +58,7 @@ class Prop3D:
         xymesh = mesh.xy
 
         self.wl0 = wl0
-        self.k0 = k0 = 2.*pi/wl0
+        self.k0 = k0 = 2.0 * np.pi/wl0
         self.k02 = k02 = k0*k0
         self.mesh = mesh
         self.n0 = n0
@@ -89,7 +88,7 @@ class Prop3D:
         dy02 = mesh.xy.dy0**2
 
         K = k02*(nb2-n02)
-        n02 = power(n0,2)
+        n02 = np.power(n0,2)
 
         ## coeff matrices of tridiagonal system, updated periodically
 
@@ -370,6 +369,7 @@ class Prop3D:
     def prop2end(self,_u,xyslice=None,zslice=None,u1_func=None,writeto=None,ref_val=5.e-6,remesh_every=20,dynamic_n0 = False,fplanewidth=0):
         mesh = self.mesh
         PML = mesh.PML
+        _trimatsx,rmatx,gx,_trimatsy,rmaty,gy,IORsq__,_IORsq_,__IORsq = self.allocate_mats()
 
         if not (xyslice is None and zslice is None):
             za_keep = mesh.za[zslice]
@@ -421,6 +421,7 @@ class Prop3D:
             xy.refine_base(u0,ref_val)
 
             weights = xy.get_weights()
+            self.optical_system.set_sampling(xy)
 
             #now resample the field onto the smaller *non-uniform* xy mesh
             u = xy.resample_complex(_u,xa_in,ya_in,xy.xa[PML:-PML],xy.ya[PML:-PML])
@@ -431,25 +432,26 @@ class Prop3D:
         
         elif callable(_u):
             # must be of the form u(x,y)
-            u0 = _u(xy.xg,xy.yg)
-            _power = overlap(u0,u0)
-            print('input power: ',_power)
+            u0 = _u(xy.xg, xy.yg)
+            _power = overlap(u0, u0)
+            print('input power: ', _power)
             
             # normalize the field, preserving the input power. accounts for grid resolution
-            normalize(u0,weight=dx0*dy0,normval=_power)
-
+            normalize(u0, weight=dx0*dy0, normval=_power)
+            
             # do an initial mesh refinement
-            xy.refine_base(u0,ref_val)
-
+            xy.refine_base(u0, ref_val)
+            self.optical_system.set_sampling(xy)
+            
             # compute the field on the nonuniform grid
-            u = norm_nonu(_u(xy.xg,xy.yg),xy.get_weights(),_power)
+            u = norm_nonu(_u(xy.xg, xy.yg), xy.get_weights(), _power)
 
         else:
             raise Exception("unsupported type for argument u in prop2end()")
 
         counter = 0
         total_iters = self.mesh.zres
-
+        self.set_IORsq(IORsq__, 0)
         print("propagating field...")
         
         __z = 0
@@ -471,7 +473,7 @@ class Prop3D:
 
         self._pmlcorrect(_trimatsx,'x')
         self._pmlcorrect(_trimatsy,'y')
-
+        
         #get the current IOR dist
         self.set_IORsq(IORsq__,z__)
 
@@ -600,6 +602,8 @@ class Prop3D:
     def prop2end_uniform(self,u,xyslice=None,zslice=None,u1_func=None,writeto=None,dynamic_n0 = False,fplanewidth=0):
         mesh = self.mesh
         PML = mesh.PML
+        _trimatsx,rmatx,gx,_trimatsy,rmaty,gy,IORsq__,_IORsq_,__IORsq = self.allocate_mats()
+        self.set_IORsq(IORsq__,0)
 
         if not (xyslice is None and zslice is None):
             za_keep = mesh.za[zslice]
@@ -623,7 +627,7 @@ class Prop3D:
 
         _power = overlap(u,u)
         print('input power: ',_power)
-
+        
         # normalize the field, preserving the input power. accounts for grid resolution
         normalize(u,weight=dx0*dy0,normval=_power)
 
