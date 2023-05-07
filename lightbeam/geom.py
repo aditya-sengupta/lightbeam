@@ -133,8 +133,12 @@ def nonu_pixwt(xc,yc,r,x,y,rx,ry,dx,dy):
     area = dx*dy/4*(rx+1)*(ry+1)
     return _intarea(xc,yc,r,x-0.5*dx,x+0.5*rx*dx,y-0.5*dy,y+0.5*ry*dy)/area
 
-def AA_circle_nonu(out,xg,yg,xgh,ygh,center,R,n0,n1,where,rxg,ryg,dxg,dyg):
-    
+def AA_circle_nonu(
+    out: np.ndarray, 
+    xg, yg, xgh, ygh, 
+    center, R, n0, n1, where,
+    rxg, ryg, dxg, dyg
+):
     xdif = xgh-center[0]
     ydif = ygh-center[1]
     rsqh = xdif*xdif+ydif*ydif

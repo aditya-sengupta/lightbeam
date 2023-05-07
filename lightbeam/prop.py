@@ -10,7 +10,7 @@ os.environ['NUMEXPR_NUM_THREADS'] = '8'
 
 from .mesh import RectMesh3D, RectMesh2D
 from .optics import OpticSys
-from .misc import overlap, normalize, overlap_nonu, norm_nonu, resize, genc
+from .misc import overlap, normalize, overlap_nonu, norm_nonu, resize, genc, timeit, timeit_tqdm
 
 ### to do ###
 
@@ -131,20 +131,18 @@ class Prop3D:
 
     def allocate_mats(self):
         sx,sy = self.mesh.xy.xg.shape,self.mesh.xy.yg.T.shape
-        _trimatsx = (genc(sx),genc(sx),genc(sx))
-        _trimatsy = (genc(sy),genc(sy),genc(sy))
+        self._trimatsx = (genc(sx),genc(sx),genc(sx))
+        self._trimatsy = (genc(sy),genc(sy),genc(sy))
 
-        rmatx,rmaty = genc(sx),genc(sy)
-        gx = genc(sx)
-        gy = genc(sy)
+        self.rmatx, self.rmaty = genc(sx),genc(sy)
+        self.gx = genc(sx)
+        self.gy = genc(sy)
 
         fill = self.nb2*self.k02
 
-        IORsq__ = np.full(sx,fill,dtype=f64)
-        _IORsq_ = np.full(sx,fill,dtype=f64)
-        __IORsq = np.full(sx,fill,dtype=f64)
-
-        return _trimatsx,rmatx,gx,_trimatsy,rmaty,gy,IORsq__,_IORsq_,__IORsq
+        self.IORsq__ = np.full(sx,fill,dtype=f64)
+        self._IORsq_ = np.full(sx,fill,dtype=f64)
+        self.__IORsq = np.full(sx,fill,dtype=f64)
 
     def check_z_inv(self):
         return self.optical_system.z_invariant
@@ -245,7 +243,7 @@ class Prop3D:
             self._b0y = ne.evaluate(eval2,local_dict={"s":s,"r2":R2[:,None],"r":r[:,None],"d":dla[:,None],"n":nu0})
             self._c0y = ne.evaluate(eval3,local_dict={"s":s,"r1":R1[:-1,None],"r":r[:-1,None],"d":dla[:-1,None],"n":nu0})
 
-    def _trimats(self,out,IORsq,which='x'):
+    def _trimats(self,IORsq,which='x'):
         ''' calculate the tridiagonal matrices in the computational zone '''
 
         ix = self.mesh.xy.cvert_ix
@@ -256,14 +254,15 @@ class Prop3D:
             r = self.mesh.xy.rxa[ix]
             dla = self.mesh.xy.dxa[ix]
             a,b,c = self._a0x,self._b0x,self._c0x
+            _a,_b,_c = self._trimatsx
             
         else:
             R1,R2,R3 = self.ygrid_cor_facs
             r = self.mesh.xy.rya[ix]
             dla = self.mesh.xy.dya[ix]
             a,b,c = self._a0y,self._b0y,self._c0y
-            
-        _a,_b,_c = out
+            _a,_b,_c = self._trimatsy
+        
 
         s = self.sig
 
@@ -315,10 +314,10 @@ class Prop3D:
         N = self.n02*self.k02
         m = np.s_[1:-1,None]
 
-        _dict = _dict = {"a":a,"b":b,"c":c,"u1":u[ix][:-2],"u2":u[ix][1:-1],"u3":u[ix][2:],"n1":_IORsq[:-2],"n2":_IORsq[1:-1],"n3":_IORsq[2:],"r3":R3[m],"r2":R2[m],"r1":R1[m] }
+        _dict = {"a":a,"b":b,"c":c,"u1":u[ix][:-2],"u2":u[ix][1:-1],"u3":u[ix][2:],"n1":_IORsq[:-2],"n2":_IORsq[1:-1],"n3":_IORsq[2:],"r3":R3[m],"r2":R2[m],"r1":R1[m] }
         _eval = "(a+0.25*r3*n1)*u1 + (b+0.25*r2*n2)*u2 + (c+0.25*r1*n3)*u3"
 
-        ne.evaluate(_eval,local_dict=_dict,out=_rmat[ix][1:-1])
+        ne.evaluate(_eval, local_dict=_dict, out=_rmat[ix][1:-1])
 
         _rmat[ix][0] = (s*R2[0] - 1/(r[0]*dla[0]**2 ) + 0.25*R2[0]*(_IORsq[0]-N))*u[0] + (s*R1[0] + 1/r[0]/(r[0]+1)/dla[0]**2 + 0.25*R1[0] * (_IORsq[1]-N) )*u[1]
         _rmat[ix][-1] =  (s*R3[-1] + 1. / ((r[-1]+1) * dla[-1]**2) + 0.25*R3[-1]*(_IORsq[-2]-N))*u[-2] + (s*R2[-1] - 1/(r[-1]*dla[-1]**2) + 0.25*R2[-1]*(_IORsq[-1]-N))*u[-1]
@@ -352,24 +351,25 @@ class Prop3D:
             self.b0y_ = ne.evaluate(eval2,local_dict=_dict)
             self.c0y_ = ne.evaluate(eval3,local_dict=_dict)
 
-    def _pmlcorrect(self,_trimats,which='x'):
+    def _pmlcorrect(self, which='x'):
         ix = self.mesh.xy.pvert_ix
-        _a,_b,_c = _trimats 
-        
+         
         if which=='x':
+            _a,_b,_c = self._trimatsx
             _a[ix] = self._apmlx[:,None]
             _b[ix] = self._bpmlx[:,None]
             _c[ix] = self._cpmlx[:,None]
         else:
+            _a,_b,_c = self._trimatsy
             _a[ix] = self._apmly[:,None]
             _b[ix] = self._bpmly[:,None]
             _c[ix] = self._cpmly[:,None]
 
-    # @timeit 
-    def prop2end(self,_u,xyslice=None,zslice=None,u1_func=None,writeto=None,ref_val=5.e-6,remesh_every=20,dynamic_n0 = False,fplanewidth=0):
+    def _prop_setup(self, _u, xyslice, zslice, ref_val, fplanewidth):
         mesh = self.mesh
         PML = mesh.PML
-        _trimatsx,rmatx,gx,_trimatsy,rmaty,gy,IORsq__,_IORsq_,__IORsq = self.allocate_mats()
+        self.allocate_mats()
+        self.set_IORsq(self.IORsq__, 0)
 
         if not (xyslice is None and zslice is None):
             za_keep = mesh.za[zslice]
@@ -384,7 +384,6 @@ class Prop3D:
         #pull xy mesh
         xy = mesh.xy
         dx,dy = xy.dx0,xy.dy0
-
 
         if fplanewidth == 0:
             xa_in = np.linspace(-mesh.xw/2,mesh.xw/2,xy.shape0_comp[0])
@@ -402,7 +401,7 @@ class Prop3D:
         # launch field
 
         if type(_u) is np.ndarray:
-
+            # "uniform" just defaults into this, which is maybe not what we want?
             _power = overlap(_u,_u)
             print('input power: ',_power)
 
@@ -440,7 +439,9 @@ class Prop3D:
             normalize(u0, weight=dx0*dy0, normval=_power)
             
             # do an initial mesh refinement
+            
             xy.refine_base(u0, ref_val)
+            
             self.optical_system.set_sampling(xy)
             
             # compute the field on the nonuniform grid
@@ -449,9 +450,79 @@ class Prop3D:
         else:
             raise Exception("unsupported type for argument u in prop2end()")
 
+        return u # and other stuff, probably
+
+    @timeit_tqdm
+    def _remesh(self, xy, u, u0, z__, dynamic_n0, ref_val):
+        ## update the effective index
+        if dynamic_n0:
+            #update the effective index
+            base = xy.get_base_field(self.IORsq__)
+            self.n02 = xy.dx0 * xy.dy0 * np.real(np.sum(u0c*u0*base))/self.k02
+
+        oldxm, oldxM = xy.xm, xy.xM
+        oldym, oldyM = xy.ym, xy.yM
+        oldxw, oldyw = xy.xw, xy.yw
+        new_xw, new_yw = oldxw, oldyw
+
+        #expand the grid if necessary
+        if self.mesh.xwfunc is not None:
+            new_xw = mesh.xwfunc(__z)
+        if self.mesh.ywfunc is not None:
+            new_yw = mesh.ywfunc(__z)
+
+        new_xw, new_yw = xy.snapto(new_xw, new_yw)
+
+        xy.reinit(new_xw, new_yw) #set grid back to base res with new dims
+
+        if (xy.xw > oldxw or xy.yw > oldyw):
+            #now we need to pad u,u0 with zeros to make sure it matches the new space
+            xpad = int((xy.shape0[0]-u0.shape[0])/2)
+            ypad = int((xy.shape0[1]-u0.shape[1])/2)
+
+            u = np.pad(u,((xpad,xpad),(ypad,ypad)))
+            u0 = np.pad(u0,((xpad,xpad),(ypad,ypad)))
+
+            #pad coord arrays to do interpolation
+            xy.xa_last = np.hstack( ( np.linspace(xy.xm,oldxm-dx,xpad) , xy.xa_last , np.linspace(oldxM + dx, xy.xM,xpad) ) )
+            xy.ya_last = np.hstack( ( np.linspace(xy.ym,oldym-dy,ypad) , xy.ya_last , np.linspace(oldyM + dy, xy.yM,ypad) ) )
+            
+        #subdivide into nonuniform grid
+        xy.refine_base(u0,ref_val)
+
+        #interp the field to the new grid   
+        u = xy.resample_complex(u)
+
+        #give the grid to the optical sys obj so it can compute IORs
+        self.optical_system.set_sampling(xy)
+
+        #compute nonuniform grid correction factors R_i
+        self.update_grid_cor_facs('x')
+        self.update_grid_cor_facs('y')
+
+        # grid size has changed, so now we need to reallocate arrays for at least the next remesh_period iters
+        self.allocate_mats()
+
+        #get the current IOR dist
+        self.set_IORsq(self.IORsq__,z__)
+        
+        #precompute things that will be reused
+        self.precomp_trimats('x')
+        self.precomp_trimats('y')
+
+        self.rmat_precomp('x')
+        self.rmat_precomp('y')
+        
+        self._pmlcorrect('x')
+        self._pmlcorrect('y')
+        return xy, u
+
+    @timeit
+    def prop2end(self, _u, xyslice=None, zslice=None, u1_func=None, writeto=None, ref_val=5.e-6, remesh_every=0, dynamic_n0 = False,fplanewidth=0):
+        u = self._prop_setup(_u, xyslice, zslice, ref_val, fplanewidth)
         counter = 0
-        total_iters = self.mesh.zres
-        self.set_IORsq(IORsq__, 0)
+        xy = self.mesh.xy
+        
         print("propagating field...")
         
         __z = 0
@@ -462,8 +533,7 @@ class Prop3D:
         self.update_grid_cor_facs('x')
         self.update_grid_cor_facs('y')
 
-        # initial array allocation
-        _trimatsx,rmatx,gx,_trimatsy,rmaty,gy,IORsq__,_IORsq_,__IORsq = self.allocate_mats()
+        self.allocate_mats()
 
         self.precomp_trimats('x')
         self.precomp_trimats('y')
@@ -471,254 +541,62 @@ class Prop3D:
         self.rmat_precomp('x')
         self.rmat_precomp('y')
 
-        self._pmlcorrect(_trimatsx,'x')
-        self._pmlcorrect(_trimatsy,'y')
+        self._pmlcorrect('x')
+        self._pmlcorrect('y')
         
         #get the current IOR dist
-        self.set_IORsq(IORsq__,z__)
-
-        #plt.figure(frameon=False)
-        #plt.imshow(xy.get_base_field(IORsq__))
-        #plt.show()
+        self.set_IORsq(self.IORsq__,z__)
 
         print("initial shape: ",xy.shape)
-        for i in trange(total_iters):
+        for i in trange(self.mesh.zres):
             u0 = xy.get_base_field(u)
             u0c = np.conj(u0)
             weights = xy.get_weights()
             
             ## Total power monitor ##
             self.totalpower[i] = overlap_nonu(u,u,weights)
-            #print(self.totalpower[i])
 
             ## Other monitors ##
             if u1_func is not None:
                 lp = norm_nonu(u1_func(xy.xg,xy.yg),weights)
                 self.power[i] = power(overlap_nonu(u,lp,weights),2)
 
-            _z_ = z__ + mesh.half_dz
-            __z = z__ + mesh.dz
+            _z_ = z__ + self.mesh.half_dz
+            __z = z__ + self.mesh.dz
             
             if self.field is not None and (minz<=__z<=maxz):
-                ix0,ix1,ix2,ix3 = mesh.get_loc() 
+                ix0,ix1,ix2,ix3 = self.mesh.get_loc() 
                 mid = int(u0.shape[1]/2)
 
                 self.field[counter][ix0:ix1+1] = u0[:,mid] ## FIX ##
-                counter+=1
+                counter += 1
 
             #avoid remeshing on step 0 
-            if (i+1)%remesh_every== 0:
+            if (remesh_every > 0) and (i+1)%remesh_every== 0:   
+                xy, u = self._remesh(xy, u, u0, z__, dynamic_n0, ref_val)
 
-                ## update the effective index
-                if dynamic_n0:
-                    #update the effective index
-                    base = xy.get_base_field(IORsq__)
-                    self.n02 = xy.dx0*xy.dy0*np.real(np.sum(u0c*u0*base))/self.k02
+            self.set_IORsq(self._IORsq_,_z_)
+            self.set_IORsq(self.__IORsq,__z)
 
-                oldxm,oldxM = xy.xm,xy.xM
-                oldym,oldyM = xy.ym,xy.yM
+            self.rmat(self.rmatx,u,self.IORsq__,'x')
+            self.rmat_pmlcorrect(self.rmatx,u,'x')
 
-                oldxw,oldyw = xy.xw,xy.yw
+            self._trimats(self._IORsq_, 'x')
+            self._trimats(self.__IORsq.T, 'y')
 
-                new_xw,new_yw = oldxw,oldyw
-                #expand the grid if necessary
-                if mesh.xwfunc is not None:
-                    new_xw = mesh.xwfunc(__z)
-                if mesh.ywfunc is not None:
-                    new_yw = mesh.ywfunc(__z)
+            tri_solve_vec(self._trimatsx[0], self._trimatsx[1], self._trimatsx[2], self.rmatx, self.gx, u)
 
-                new_xw, new_yw = xy.snapto(new_xw,new_yw)
+            self.rmat(self.rmaty,u.T,self._IORsq_.T,'y')
+            self.rmat_pmlcorrect(self.rmaty, u.T,'y')
 
-                xy.reinit(new_xw,new_yw) #set grid back to base res with new dims
-
-                if (xy.xw > oldxw or xy.yw > oldyw):
-                    #now we need to pad u,u0 with zeros to make sure it matches the new space
-                    xpad = int((xy.shape0[0]-u0.shape[0])/2)
-                    ypad = int((xy.shape0[1]-u0.shape[1])/2)
-
-                    u = np.pad(u,((xpad,xpad),(ypad,ypad)))
-                    u0 = np.pad(u0,((xpad,xpad),(ypad,ypad)))
-
-                    #pad coord arrays to do interpolation
-                    xy.xa_last = np.hstack( ( np.linspace(xy.xm,oldxm-dx,xpad) , xy.xa_last , np.linspace(oldxM + dx, xy.xM,xpad) ) )
-                    xy.ya_last = np.hstack( ( np.linspace(xy.ym,oldym-dy,ypad) , xy.ya_last , np.linspace(oldyM + dy, xy.yM,ypad) ) )
-                   
-                #subdivide into nonuniform grid
-                xy.refine_base(u0,ref_val)
-
-                #interp the field to the new grid   
-                u = xy.resample_complex(u)
-
-                #give the grid to the optical sys obj so it can compute IORs
-                self.optical_system.set_sampling(xy)
-
-                #compute nonuniform grid correction factors R_i
-                self.update_grid_cor_facs('x')
-                self.update_grid_cor_facs('y')
-
-                # grid size has changed, so now we need to reallocate arrays for at least the next remesh_period iters
-                _trimatsx,rmatx,gx,_trimatsy,rmaty,gy,IORsq__,_IORsq_,__IORsq = self.allocate_mats()
-
-                #get the current IOR dist
-                self.set_IORsq(IORsq__,z__)
-                
-                #precompute things that will be reused
-                self.precomp_trimats('x')
-                self.precomp_trimats('y')
-
-                self.rmat_precomp('x')
-                self.rmat_precomp('y')
-                
-                self._pmlcorrect(_trimatsx,'x')
-                self._pmlcorrect(_trimatsy,'y')
-
-            self.set_IORsq(_IORsq_,_z_,)
-            self.set_IORsq(__IORsq,__z)
-
-            self.rmat(rmatx,u,IORsq__,'x')
-            self.rmat_pmlcorrect(rmatx,u,'x')
-
-            self._trimats(_trimatsx,_IORsq_,'x')
-            self._trimats(_trimatsy,__IORsq.T,'y')
-
-            tri_solve_vec(_trimatsx[0],_trimatsx[1],_trimatsx[2],rmatx,gx,u)
-
-            self.rmat(rmaty,u.T,_IORsq_.T,'y')
-            self.rmat_pmlcorrect(rmaty,u.T,'y')
-
-            tri_solve_vec(_trimatsy[0],_trimatsy[1],_trimatsy[2],rmaty,gy,u.T)
+            tri_solve_vec(self._trimatsy[0], self._trimatsy[1], self._trimatsy[2], self.rmaty, self.gy, u.T)
 
             z__ = __z
-            if (i+2)%remesh_every != 0:
-                IORsq__[:,:] = __IORsq
+            if remesh_every == 0 or (i+2) % remesh_every != 0:
+                self.IORsq__[:,:] = self.__IORsq
   
         print("final total power",self.totalpower[-1])
         
         if writeto:
             np.save(writeto,self.field)
         return u,u0
-
-    # @timeit 
-    def prop2end_uniform(self,u,xyslice=None,zslice=None,u1_func=None,writeto=None,dynamic_n0 = False,fplanewidth=0):
-        mesh = self.mesh
-        PML = mesh.PML
-        _trimatsx,rmatx,gx,_trimatsy,rmaty,gy,IORsq__,_IORsq_,__IORsq = self.allocate_mats()
-        self.set_IORsq(IORsq__,0)
-
-        if not (xyslice is None and zslice is None):
-            za_keep = mesh.za[zslice]
-            if type(za_keep) == np.ndarray:
-                minz, maxz = za_keep[0],za_keep[-1]
-                shape = (len(za_keep),*mesh.xg[xyslice].shape)
-            else:
-                raise Exception('uhh not implemented')
-            
-            self.field = np.zeros(shape,dtype=c128)
-
-        if fplanewidth == 0:
-            xa_in = np.linspace(-mesh.xw/2,mesh.xw/2,u.shape[0])
-            ya_in = np.linspace(-mesh.yw/2,mesh.yw/2,u.shape[1])
-        else:
-            xa_in = np.linspace(-fplanewidth/2,fplanewidth/2,u.shape[0])
-            ya_in = np.linspace(-fplanewidth/2,fplanewidth/2,u.shape[1])
-
-        dx0 = xa_in[1]-xa_in[0]
-        dy0 = ya_in[1]-ya_in[0]
-
-        _power = overlap(u,u)
-        print('input power: ',_power)
-        
-        # normalize the field, preserving the input power. accounts for grid resolution
-        normalize(u,weight=dx0*dy0,normval=_power)
-
-        __z = 0
-
-        #pull xy mesh
-        xy = mesh.xy
-        dx,dy = xy.dx0,xy.dy0
-
-        #resample the field onto the smaller xy mesh (in the smaller mesh's computation zone)
-        u0 = xy.resample_complex(u,xa_in,ya_in,xy.xa[PML:-PML],xy.ya[PML:-PML])
-
-        _power2 = overlap(u0,u0,dx*dy)
-
-        #now we pad w/ zeros to extend it into the PML zone
-        u0 = np.pad(u0,((PML,PML),(PML,PML)))
-
-
-        counter = 0
-        total_iters = self.mesh.zres
-
-        print("propagating field...")
-
-        z__ = 0
-
-        #step 0 setup
-
-        self.update_grid_cor_facs('x')
-        self.update_grid_cor_facs('y')
-
-        # initial array allocation
-        _trimatsx,rmatx,gx,_trimatsy,rmaty,gy,IORsq__,_IORsq_,__IORsq = self.allocate_mats()
-
-        self.precomp_trimats('x')
-        self.precomp_trimats('y')
-
-        self.rmat_precomp('x')
-        self.rmat_precomp('y')
-
-        self._pmlcorrect(_trimatsx,'x')
-        self._pmlcorrect(_trimatsy,'y')
-
-        #get the current IOR dist
-        self.set_IORsq(IORsq__,z__)
-
-        weights = xy.get_weights()
-
-        print("initial shape: ",xy.shape)
-        for i in trange(total_iters):       
-
-            ## Total power monitor ##
-            self.totalpower[i] = overlap_nonu(u0,u0,weights)
-
-            ## Other monitors ##
-            if u1_func is not None:
-                lp = norm_nonu(u1_func(xy.xg,xy.yg),weights)
-                self.power[i] = power(overlap_nonu(u0,lp,weights),2)
-
-            _z_ = z__ + mesh.half_dz
-            __z = z__ + mesh.dz
-            
-            if self.field is not None and (minz<=__z<=maxz):
-                ix0,ix1,ix2,ix3 = mesh.get_loc() 
-                mid = int(u0.shape[1]/2)
-
-                self.field[counter][ix0:ix1+1] = u0[:,mid] ## FIX ##
-                counter+=1
-
-            self.set_IORsq(_IORsq_,_z_,)
-            self.set_IORsq(__IORsq,__z)
-
-            self.rmat(rmatx,u0,IORsq__,'x')
-            self.rmat_pmlcorrect(rmatx,u0,'x')
-
-            self._trimats(_trimatsx,_IORsq_,'x')
-            self._trimats(_trimatsy,__IORsq.T,'y')
-
-            tri_solve_vec(_trimatsx[0],_trimatsx[1],_trimatsx[2],rmatx,gx,u0)
-
-
-            self.rmat(rmaty,u0.T,_IORsq_.T,'y')
-            self.rmat_pmlcorrect(rmaty,u0.T,'y')
-
-            tri_solve_vec(_trimatsy[0],_trimatsy[1],_trimatsy[2],rmaty,gy,u0.T)
-
-            z__ = __z
-            IORsq__[:,:] = __IORsq
-            # tqdm.write(str(psutil.virtual_memory().percent))
-  
-        print("final total power",self.totalpower[-1])
-        
-        if writeto:
-            np.save(writeto,self.field)
-        return u0

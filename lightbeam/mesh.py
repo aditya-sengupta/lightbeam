@@ -256,7 +256,7 @@ class RectMesh2D:
         xa_old = self.xa
         ya_old = self.ya
 
-        self.update(rfacxa,rfacya)
+        self.update(rfacxa, rfacya)
 
         return self.resample_complex(u0,xa_old,ya_old,self.xa,self.ya)
 

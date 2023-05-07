@@ -1,11 +1,10 @@
-''' Example tests showcasing the potential savings in computation time offered by AMR. The waveguide used in this test is a 3 port lantern. '''
+''' Example tests showcasing the potential savings in computation time offered by AMR.'''
 
 import matplotlib.pyplot as plt
 import numpy as np
-from lightbeam import RectMesh3D, make_lant3big, Prop3D, normalize, lpfield
+from lightbeam import RectMesh3D, make_lant3big, make_lant6_saval, Prop3D, normalize, lpfield, norm_nonu, overlap_nonu
 
 def compute_port_power(ds, AMR=False, ref_val=2e-4, max_iters=5, remesh_every=50):
-    ''' Compute the output port powers for a 3 port lantern, given some simulation parameters. '''
     # wavelength
     wl = 1.0 #um
 
@@ -29,10 +28,11 @@ def compute_port_power(ds, AMR=False, ref_val=2e-4, max_iters=5, remesh_every=50
     ncore = nclad + 0.0088
     njack = nclad - 5.5e-3
 
-    lant = make_lant3big(rclad/2, rcore, rclad, 0, zw, (ncore, nclad, njack), final_scale=taper_factor)
+    # lant = make_lant3big(rclad/2, rcore, rclad, 0, zw, (ncore, nclad, njack), final_scale=taper_factor)
+    lant = make_lant6_saval(rclad/2, rcore, rclad, 0, zw, (ncore, nclad, njack), final_scale=taper_factor)
 
     def launch_field(x, y):
-        return normalize(np.exp(10.j * x * wl / xw) * lpfield(x, y ,0, 1, rclad, wl, ncore, nclad))
+        return normalize(np.exp(10.j * x * wl / xw) * lpfield(x, y, 0, 1, rclad, wl, ncore, nclad))
 
     # propagation
 
@@ -41,7 +41,7 @@ def compute_port_power(ds, AMR=False, ref_val=2e-4, max_iters=5, remesh_every=50
     if AMR:
         u, u0 = prop.prop2end(launch_field, ref_val=ref_val, remesh_every=remesh_every)
     else:
-        u = u0 = prop.prop2end_uniform(launch_field(xg, yg))
+        u = u0 = prop.prop2end(launch_field(xg, yg), remesh_every=0)
 
     xg, yg = np.meshgrid(mesh.xy.xa, mesh.xy.ya, indexing='ij')
 
@@ -51,11 +51,11 @@ def compute_port_power(ds, AMR=False, ref_val=2e-4, max_iters=5, remesh_every=50
 
     output_powers = []
     for pos in lant.final_core_locs:
-        _m = norm_nonu(LPmodes.lpfield(xg-pos[0], yg-pos[1], 0, 1, rcore*taper_factor, wl, ncore, nclad), w)
+        _m = norm_nonu(lpfield(xg-pos[0], yg-pos[1], 0, 1, rcore*taper_factor, wl, ncore, nclad), w)
         output_powers.append(np.power(overlap_nonu(_m, u, w), 2))
 
     return np.array(output_powers)
 
 if __name__ == "__main__":
-    output = compute_port_power(1/4,True)
+    output = compute_port_power(1/4, True)
     print(output)

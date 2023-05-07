@@ -1,8 +1,11 @@
 ''' bunch of miscellaneous functions that I didn't know where to put'''
 
 import numpy as np
+import time
+import tqdm
 
 from bisect import bisect_left
+from functools import partial
 from numpy import complex128 as c128
 from scipy.interpolate import RectBivariateSpline
 
@@ -46,9 +49,6 @@ def norm_nonu(u0, weights, normval = 1):
     u0 *= norm
     return u0
 
-def timeit(method):
-    raise Exception("use ipython's %timeit line magic")
-
 def gauss(xg,yg,theta,phi,sigu,sigv,k0,x0=0,y0=0.):
     '''tilted gaussian beam'''
     u = np.cos(theta)*np.cos(phi)*(xg-x0) + np.cos(theta)*np.sin(phi)*(yg-y0)
@@ -78,3 +78,21 @@ def write_rsoft(fname, u0, xw, yw):
     
     header = "/rn,a,b/nx0/ls1\n/r,qa,qb\n{} {} {} 0 OUTPUT_REAL_IMAG_3D\n{} {} {}".format(u0.shape[0],-xw/2,xw/2,u0.shape[1],-yw/2,yw/2)
     np.savetxt(fname+".dat", out.T, header = header, fmt = "%f",comments="",newline="\n")
+
+def timeit_maker(method, useprint):
+    '''pulled from someone's github or something. can't find it anymore'''
+    def timed(*args, **kw):
+        ts = time.time()
+        result = method(*args, **kw)
+        te = time.time()
+        if 'log_time' in kw:
+            name = kw.get('log_name', method.__name__.upper())
+            kw['log_time'][name] = int((te - ts))
+        else:
+            useprint('%r  %2.4f s' % \
+                  (method.__name__, (te - ts)))
+        return result
+    return timed
+
+timeit = partial(timeit_maker, useprint=print)
+timeit_tqdm = partial(timeit_maker, useprint=tqdm.tqdm.write)

@@ -67,7 +67,7 @@ class OpticPrim:
 
         if self.z_invariant and self.mask_saved is not None:
             mask = self.mask_saved
-        else:    
+        else:
             bbox,bboxh = self.bbox_idx(z)
             mask = self._contains(self.xymesh.xg[bbox],self.xymesh.yg[bbox],z)
         
