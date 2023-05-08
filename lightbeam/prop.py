@@ -365,20 +365,15 @@ class Prop3D:
             _b[ix] = self._bpmly[:,None]
             _c[ix] = self._cpmly[:,None]
 
-    def _prop_setup(self, _u, xyslice, zslice, ref_val, fplanewidth):
+    def _prop_setup(self, u, xyslice, zslice, ref_val, fplanewidth, remeshing):
         mesh = self.mesh
         PML = mesh.PML
-        self.allocate_mats()
-        self.set_IORsq(self.IORsq__, 0)
 
         if not (xyslice is None and zslice is None):
             za_keep = mesh.za[zslice]
-            if type(za_keep) == np.ndarray:
-                minz, maxz = za_keep[0],za_keep[-1]
-                shape = (len(za_keep),*mesh.xg[xyslice].shape)
-            else:
-                raise Exception('uhh not implemented')
-            
+            assert type(za_keep) == np.ndarray
+            minz, maxz = za_keep[0],za_keep[-1]
+            shape = (len(za_keep),*mesh.xg[xyslice].shape)
             self.field = np.zeros(shape,dtype=c128)
 
         #pull xy mesh
@@ -392,65 +387,63 @@ class Prop3D:
             xa_in = np.linspace(-fplanewidth/2,fplanewidth/2,xy.shape0_comp[0])
             ya_in = np.linspace(-fplanewidth/2,fplanewidth/2,xy.shape0_comp[1])
 
-        dx0 = xa_in[1]-xa_in[0]
-        dy0 = ya_in[1]-ya_in[0]
+        dx0 = xa_in[1] - xa_in[0]
+        dy0 = ya_in[1] - ya_in[0]
 
         # u can either be a field or a function that generates a field.
         # the latter option allows for coarse base grids to be used 
         # without being penalized by forcing the use of a low resolution
         # launch field
 
-        if type(_u) is np.ndarray:
-            # "uniform" just defaults into this, which is maybe not what we want?
-            _power = overlap(_u,_u)
-            print('input power: ',_power)
+        if type(u) is np.ndarray:
+            _power = overlap(u, u)
+            print("input power: ", _power)
 
             # normalize the field, preserving the input power. accounts for grid resolution
-            normalize(_u,weight=dx0*dy0,normval=_power)
+            normalize(u, weight=dx0*dy0,normval=_power)
 
             #resample the field onto the smaller xy mesh (in the smaller mesh's computation zone)
-            u0 = xy.resample_complex(_u,xa_in,ya_in,xy.xa[PML:-PML],xy.ya[PML:-PML])
+            u0 = xy.resample_complex(u, xa_in, ya_in, xy.xa[PML:-PML], xy.ya[PML:-PML])
 
-            _power2 = overlap(u0,u0,dx*dy)
+            _power2 = overlap(u0, u0, dx*dy)
 
             #now we pad w/ zeros to extend it into the PML zone
             u0 = np.pad(u0,((PML,PML),(PML,PML)))
 
             #initial mesh refinement
-            xy.refine_base(u0,ref_val)
+            if remeshing:
+                xy.refine_base(u0,ref_val)
 
             weights = xy.get_weights()
             self.optical_system.set_sampling(xy)
 
             #now resample the field onto the smaller *non-uniform* xy mesh
-            u = xy.resample_complex(_u,xa_in,ya_in,xy.xa[PML:-PML],xy.ya[PML:-PML])
-            u = np.pad(u,((PML,PML),(PML,PML)))
+            u = xy.resample_complex(u,xa_in,ya_in,xy.xa[PML:-PML],xy.ya[PML:-PML])
+            return np.pad(u,((PML,PML),(PML,PML)))
 
             #do another norm to correct for the slight power change you get when resampling. I measure 0.1% change for psflo. should check again
-            norm_nonu(u,weights,_power2)
+            # norm_nonu(u, weights, _power2)
         
-        elif callable(_u):
+        elif callable(u):
             # must be of the form u(x,y)
-            u0 = _u(xy.xg, xy.yg)
-            _power = overlap(u0, u0)
+            u, uf = u(xy.xg, xy.yg), u
+            _power = overlap(u, u)
             print('input power: ', _power)
             
             # normalize the field, preserving the input power. accounts for grid resolution
-            normalize(u0, weight=dx0*dy0, normval=_power)
+            normalize(u, weight=dx0*dy0, normval=_power)
             
             # do an initial mesh refinement
             
-            xy.refine_base(u0, ref_val)
+            xy.refine_base(u, ref_val)
             
             self.optical_system.set_sampling(xy)
             
             # compute the field on the nonuniform grid
-            u = norm_nonu(_u(xy.xg, xy.yg), xy.get_weights(), _power)
+            return norm_nonu(uf(xy.xg, xy.yg), xy.get_weights(), _power)
 
         else:
-            raise Exception("unsupported type for argument u in prop2end()")
-
-        return u # and other stuff, probably
+            raise Exception("unsupported type for argument u in prop2end")
 
     @timeit_tqdm
     def _remesh(self, xy, u, u0, z__, dynamic_n0, ref_val):
@@ -519,7 +512,7 @@ class Prop3D:
 
     @timeit
     def prop2end(self, _u, xyslice=None, zslice=None, u1_func=None, writeto=None, ref_val=5.e-6, remesh_every=0, dynamic_n0 = False,fplanewidth=0):
-        u = self._prop_setup(_u, xyslice, zslice, ref_val, fplanewidth)
+        u = self._prop_setup(_u, xyslice, zslice, ref_val, fplanewidth, remesh_every > 0)
         counter = 0
         xy = self.mesh.xy
         
@@ -545,7 +538,7 @@ class Prop3D:
         self._pmlcorrect('y')
         
         #get the current IOR dist
-        self.set_IORsq(self.IORsq__,z__)
+        self.set_IORsq(self.IORsq__, z__)
 
         print("initial shape: ",xy.shape)
         for i in trange(self.mesh.zres):
@@ -599,4 +592,5 @@ class Prop3D:
         
         if writeto:
             np.save(writeto,self.field)
+            
         return u,u0

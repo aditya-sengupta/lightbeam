@@ -18,9 +18,8 @@ def compute_port_power(ds, AMR=False, ref_val=2e-4, max_iters=5, remesh_every=50
     mesh = RectMesh3D(xw,yw,zw,ds,dz,num_PML)
     mesh.xy.max_iters = max_iters
 
-    xg, yg = mesh.xg[num_PML:-num_PML,num_PML:-num_PML], mesh.yg[num_PML:-num_PML,num_PML:-num_PML]
+    xg,yg = mesh.xg[num_PML:-num_PML,num_PML:-num_PML] , mesh.yg[num_PML:-num_PML,num_PML:-num_PML]
 
-    # optic (3 port lantern)
     taper_factor = 4
     rcore = 2.2/taper_factor # INITIAL core radius
     rclad = 4
@@ -41,7 +40,7 @@ def compute_port_power(ds, AMR=False, ref_val=2e-4, max_iters=5, remesh_every=50
     if AMR:
         u, u0 = prop.prop2end(launch_field, ref_val=ref_val, remesh_every=remesh_every)
     else:
-        u = u0 = prop.prop2end(launch_field(xg, yg), remesh_every=0)
+        u, u0 = prop.prop2end(launch_field(xg, yg))
 
     xg, yg = np.meshgrid(mesh.xy.xa, mesh.xy.ya, indexing='ij')
 
@@ -57,5 +56,5 @@ def compute_port_power(ds, AMR=False, ref_val=2e-4, max_iters=5, remesh_every=50
     return np.array(output_powers)
 
 if __name__ == "__main__":
-    output = compute_port_power(1/4, True)
+    output = compute_port_power(1/4, False)
     print(output)

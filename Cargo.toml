@@ -1,0 +1,20 @@
+[package]
+name = "lightbeam"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "lightbeamrs"
+crate-type = ["cdylib"]
+path = "lightbeam/lib.rs"
+
+[dependencies]
+ndarray = "0.15.6"
+pyo3 = "0.18.1"
+numpy = "0.18.0"
+
+[profile.release]
+debug = true       # Debug symbols for our profiler.
+lto = true         # Link-time optimization.
+# codegen-units = 1  # Slower compilation but faster code. 
