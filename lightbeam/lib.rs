@@ -6,7 +6,7 @@ use numpy::{PyArray1,IntoPyArray,ToPyArray};
 // ported to pixwt.pro (IDL) by Doug Loucks, Lowell Observatory, 1992 Sep
 // subsequently ported to python by Michael Fitzgerald,
 // LLNL, fitzgerald15@llnl.gov, 2007-10-16
-// and ported to Rust for Python usage by Aditya Sengupta, UC Santa Cruz, 2023-05-07
+// and ported to Rust for Python usage by Aditya Sengupta, UC Santa Cruz, (date)
 
 // Marc Buie, you are my hero
 
@@ -40,7 +40,7 @@ fn _arc(
     Ok(Array1::from_vec(ans).to_pyarray(py).to_owned())
 }
 
-fn _chord_ind(x: f64, y0: f64, y1: f64) -> f64 {
+/*fn _chord_ind(x: f64, y0: f64, y1: f64) -> f64 {
     /*
     Compute the area of a triangle defined by the origin and two
     points, (x,y0) and (x,y1).  This is a signed area.  If y1 > y0
@@ -56,7 +56,7 @@ fn _chord(
     // let mut res = x.clone();
     Ok((0.5 * x * (y1 - y0)).to_pyarray(py).to_owned())
     //Ok(Array1::from_vec(res).to_pyarray(py).to_owned())
-}
+} */
 
 /*#[pyfunction]
 fn _oneside(x: f64, y0: f64, y1: f64, r: f64) -> PyReadonlyArray1<'static, f64> {
@@ -67,6 +67,6 @@ fn _oneside(x: f64, y0: f64, y1: f64, r: f64) -> PyReadonlyArray1<'static, f64> 
 #[pymodule]
 fn lightbeamrs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(_arc, m)?)?;
-    m.add_function(wrap_pyfunction!(_chord, m)?)?;
+    // m.add_function(wrap_pyfunction!(_chord, m)?)?;
     Ok(())
 }

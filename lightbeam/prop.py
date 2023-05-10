@@ -510,7 +510,6 @@ class Prop3D:
         self._pmlcorrect('y')
         return xy, u
 
-    @timeit
     def prop2end(self, _u, xyslice=None, zslice=None, u1_func=None, writeto=None, ref_val=5.e-6, remesh_every=0, dynamic_n0 = False,fplanewidth=0):
         u = self._prop_setup(_u, xyslice, zslice, ref_val, fplanewidth, remesh_every > 0)
         counter = 0
@@ -593,4 +592,4 @@ class Prop3D:
         if writeto:
             np.save(writeto,self.field)
             
-        return u,u0
+        return u

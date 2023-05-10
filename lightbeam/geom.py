@@ -144,19 +144,21 @@ def AA_circle_nonu(
     center, R, n0, n1, where,
     rxg, ryg, dxg, dyg
 ):
-    xdif = xgh-center[0]
-    ydif = ygh-center[1]
-    rsqh = xdif*xdif+ydif*ydif
-    mask_in,mask_b = get_masks(rsqh,R*R)
-    out[where][mask_in] = n1
-    x0,y0 = xg[mask_b],yg[mask_b]
+    xdif = xgh - center[0]
+    ydif = ygh - center[1]
+    rsqh = xdif*xdif + ydif*ydif
+    out_where = out[where] # I want to make sure this doesn't copy
+    mask_in, mask_b = get_masks(rsqh,R*R)
+    
+    out_where[mask_in] = n1
+    x0, y0 = xg[mask_b], yg[mask_b]
 
-    rx,ry = rxg[where][mask_b], ryg[where][mask_b]
-    dx,dy = dxg[where][mask_b], dyg[where][mask_b]
+    rx, ry = rxg[where][mask_b], ryg[where][mask_b]
+    dx, dy = dxg[where][mask_b], dyg[where][mask_b]
 
-    area = nonu_pixwt(center[0],center[1],R,x0,y0,rx,ry,dx,dy)
-    newvals = n1*area+n0*(1-area)
-    out[where][mask_b] = newvals
+    area = nonu_pixwt(center[0], center[1], R, x0, y0, rx, ry, dx, dy)
+    newvals = n1 * area + n0 * (1-area)
+    out_where[mask_b] = newvals
 
 @njit
 def pixwt(xc, yc, r, x, y):

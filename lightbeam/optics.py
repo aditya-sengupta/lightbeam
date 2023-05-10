@@ -4,6 +4,7 @@ from matplotlib import pyplot as plt
 from bisect import bisect_left, bisect_right
 from functools import partial
 from itertools import repeat
+from numba import jit
 from numpy import logical_and as AND, logical_not as NOT
 from typing import List
 
@@ -47,14 +48,14 @@ class OpticPrim:
     def bbox_idx(self,z):
         '''get index slice corresponding to the primitives bbox, given an xg,yg coord grid'''
         m = self.xymesh
-        xa,ya = m.xa,m.ya
+        xa, ya = m.xa, m.ya
 
         xmin,xmax,ymin,ymax = self._bbox(z)
-        imin = max(bisect_left(xa,xmin)-1,0)
-        imax = min(bisect_left(xa,xmax)+1,len(xa))
-        jmin = max(bisect_left(ya,ymin)-1,0)
-        jmax = min(bisect_left(ya,ymax)+1,len(ya))
-        return np.s_[imin:imax,jmin:jmax], np.s_[imin:imax+1,jmin:jmax+1]
+        imin = max(bisect_left(xa,xmin) - 1, 0)
+        imax = min(bisect_left(xa,xmax) + 1, len(xa))
+        jmin = max(bisect_left(ya,ymin) - 1, 0)
+        jmax = min(bisect_left(ya,ymax) + 1, len(ya))
+        return np.s_[imin:imax, jmin:jmax], np.s_[imin:imax+1,jmin:jmax+1]
     
     def set_sampling(self, xymesh:RectMesh2D):
         self.xymesh = xymesh
@@ -70,7 +71,7 @@ class OpticPrim:
         else:
             bbox,bboxh = self.bbox_idx(z)
             mask = self._contains(self.xymesh.xg[bbox],self.xymesh.yg[bbox],z)
-        
+
         if self.z_invariant and self.mask_saved is None:
             self.mask_saved = mask
         
@@ -164,7 +165,9 @@ class ScaledCyl(OpticPrim):
         yg = self.xymesh.yg[bbox]
         xhg = self.xymesh.xhg[bboxh]
         yhg = self.xymesh.yhg[bboxh]
-
+        if xhg.shape != yhg.shape:
+            print("about to error")
+            print(self.xymesh.xhg.shape, self.xymesh.yhg.shape, bboxh)
         AA_circle_nonu(out,xg,yg,xhg,yhg,center,self.r*scale,self.nb2*coeff,self.n2*coeff,bbox,self.rxg,self.ryg,self.dxg,self.dyg)
     
 class OpticSys(OpticPrim):
@@ -230,6 +233,7 @@ class Lantern(OpticSys):
             nb = njack
             
         # cladding
+        self.entry_idx = len(elements)
         elements.append(
             ScaledCyl([0.0, 0.0], rclad, z_ex, nclad, njack, scale_func=scale_func, final_scale=final_scale)
         )
@@ -248,16 +252,39 @@ class Lantern(OpticSys):
         self.init_core_locs = np.array(port_positions)
         self.final_core_locs = self.init_core_locs * final_scale
 
-    def check_smfs(self, k0):
-        return list(
+    def check_smfs(self, k0, verbose=True):
+        """
+        Checks that all the single-mode fibers are actually single-mode. We want this to return a list of all 1s.
+        """
+
+        nums_modes = map(
+            lambda el: get_num_modes(k0, el.r, el.n, np.sqrt(el.nb2)), 
             map(
-                lambda el: get_num_modes(k0, el.r, el.n, np.sqrt(el.nb2)), 
-                map(
-                    lambda i: self.elements[i], 
-                    self.core_idxs
-                )
+                lambda i: self.elements[i], 
+                self.core_idxs
             )
         )
+
+        valid = True
+        for (i, n) in enumerate(nums_modes):
+            if n != 1:
+                if verbose:
+                    print(f"Lantern setup error: port {i} is meant to support one mode but supports {n}.")
+                valid = False
+        
+        return valid
+
+    def check_mode_support(self, k0, verbose=True):
+        """
+        Checks that the multi-mode entrance supports at most as many modes as there are ports to sense them.
+        """
+        mmf = self.elements[self.entry_idx]
+        mmf_modes = get_num_modes(k0, mmf.r, mmf.n, np.sqrt(mmf.nb2))
+        valid = mmf_modes <= len(self.core_idxs)
+        if not valid and verbose:
+            print(f"Possible light leakage: lantern MMF entrance supports {mmf_modes} modes but can only be detected by {len(self.core_idxs)} single-mode fibers.")
+        return valid
+
 
 def make_lant5(offset0, *args, **kwargs):
     positions = [[0,-offset0], [-offset0,0], [0,offset0], [offset0,0], [0,0]]
@@ -289,7 +316,7 @@ def make_lant6_saval(offset0, port_radii, *args, **kwargs):
     if len(port_radii) == 4:
         port_radii = [port_radii[x] for x in [1, 1, 2, 2, 3, 0]]
     else:
-        port_radii = port_radii[1:] + [port_radii[0]] # move the core to the end
+        port_radii = port_radii[1:] + [port_radii[0]] # move the central SMF to the end
 
     return Lantern(positions, port_radii, *args, **kwargs)
 
