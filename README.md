@@ -18,3 +18,4 @@ This material is based upon work supported by the National Science Foundation Gr
 - refactor of `Prop3D.prop2end`: combine `prop2end` and `prop2end_uniform`, turn internal variables into class variables
 - move meshing logic into `Prop3D._remesh` and propagation setup logic into `Prop3D._prop_setup`
 - experimental lib.rs stuff to replace `tri_solve_vec` and eventually some of the matrix allocations and remeshing
+- trying to chase down the shape error in `optics.py:set_IORsq`
