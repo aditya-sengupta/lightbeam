@@ -55,7 +55,7 @@ class OpticPrim:
         imax = min(bisect_left(xa,xmax) + 1, len(xa))
         jmin = max(bisect_left(ya,ymin) - 1, 0)
         jmax = min(bisect_left(ya,ymax) + 1, len(ya))
-        return np.s_[imin:imax, jmin:jmax], np.s_[imin:imax+1,jmin:jmax+1]
+        return np.s_[imin:imax, jmin:jmax], np.s_[imin:min(len(xa),imax+1),jmin:min(len(ya),jmax+1)]
     
     def set_sampling(self, xymesh:RectMesh2D):
         self.xymesh = xymesh
