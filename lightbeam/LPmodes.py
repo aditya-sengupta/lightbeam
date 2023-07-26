@@ -5,6 +5,8 @@ from numpy.lib import scimath
 from scipy.special import jn_zeros, jn, kn, jv, kv
 from scipy.optimize import brentq
 
+from hcipy import ModeBasis, Field
+
 def get_NA(ncore,nclad):
     return np.sqrt(ncore*ncore - nclad*nclad)
 
@@ -123,35 +125,48 @@ def get_b(l, m, V):
 
     return b_opt
 
-def lpfield(xg,yg,l,m,a,wl0,ncore,nclad,which = "cos"):
+def lpfield(xg, yg, l, m, a, wl0, ncore, nclad):
     '''calculate transverse field distribution of lp mode'''
 
-    assert which in ("cos","sin"), "lp mode azimuthal component is either a cosine or sine, choose either 'cos' or 'sin'"
+    # assert which in ("cos","sin"), "lp mode azimuthal component is either a cosine or sine, choose either 'cos' or 'sin'"
 
-    V = get_V(2*np.pi/wl0,a,ncore,nclad)
+    V = get_V(2*np.pi/wl0, a, ncore, nclad)
     rs = np.sqrt(np.power(xg,2) + np.power(yg,2))
-    b = get_b(l,m,V)
+    b = get_b(l, m, V)
     if np.isnan(b):
         b = 0.001
 
-    #print(np.sqrt(nclad**2+b*(ncore**2-nclad**2)))
+    u = V * np.sqrt(1 - b)
+    v = V * np.sqrt(b) 
 
-    u = V*np.sqrt(1-b)
-    v = V*np.sqrt(b) 
-
-    fieldout = np.zeros_like(rs,dtype = np.complex128)
+    fieldout = np.zeros_like(rs, dtype = np.complex128)
     
-    inmask = np.nonzero(rs<=a)
-    outmask = np.nonzero(rs>a)
+    inmask = np.nonzero(rs <= a)
+    outmask = np.nonzero(rs > a)
 
-    fieldout[inmask] = jn(l,u*rs[inmask]/a)
-    fieldout[outmask] = jn(l,u)/kn(l,v) * kn(l,v*rs[outmask]/a)
+    fieldout[inmask] = jn(l, u * rs[inmask] / a)
+    fieldout[outmask] = jn(l, u) / kn(l,v) * kn(l, v * rs[outmask] / a)
 
     #cosine/sine modulation
     phis = np.arctan2(yg,xg)
-    fieldout *= eval("np." + which)(l*phis)
+    fieldout *= np.exp(1j * l * phis)
 
     return fieldout
+
+def make_complex_lp_basis(grid, a, wl0, ncore, nclad):
+    """
+    Make a basis of complex LP modes for a step-index fiber.
+    """
+    # replacement for hcipy's make_lp_basis, with the complex component
+    V = get_V(2*np.pi / wl0, a, ncore, nclad)
+    modes = get_modes(V)
+    return ModeBasis([
+        Field(
+            lpfield(grid.x, grid.y, l, m, a, wl0, ncore, nclad),
+            grid
+        )
+        for (l, m) in modes
+    ])
 
 def get_IOR(wl):
     """ for fused silica """

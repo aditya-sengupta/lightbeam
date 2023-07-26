@@ -1,5 +1,6 @@
 import numpy as np
 from matplotlib import pyplot as plt
+from astropy import units as u
 
 from bisect import bisect_left, bisect_right
 from functools import partial
@@ -311,7 +312,7 @@ def make_lant6_saval(offset0, port_radii, *args, **kwargs):
     '''6 port lantern, mode-selective, based off sergio leon-saval's paper'''
     t = 2 * np.pi / 5
     positions = [[offset0 * np.cos(i*t), offset0 * np.sin(i*t)] for i in range(5)] + [[0,0]]
-    if type(port_radii) in (float, int):
+    if type(port_radii) in (float, int, u.Quantity):
         port_radii = list(repeat(port_radii, 6))
     if len(port_radii) == 4:
         port_radii = [port_radii[x] for x in [1, 1, 2, 2, 3, 0]]

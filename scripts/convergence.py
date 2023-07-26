@@ -31,16 +31,16 @@ def compute_port_power(ds, AMR=False, ref_val=2e-4, max_iters=5, remesh_every=50
     lant = make_lant6_saval(rclad/2, rcore, rclad, 0, zw, (ncore, nclad, njack), final_scale=taper_factor)
 
     def launch_field(x, y):
-        return normalize(np.exp(10.j * x * wl / xw) * lpfield(x, y, 0, 1, rclad, wl, ncore, nclad))
-
+        return normalize(lpfield(x, y, 0, 1, rclad, wl, ncore, nclad))
+        
     # propagation
 
     prop = Prop3D(wl, mesh, lant, nclad)
 
     if AMR:
-        u, u0 = prop.prop2end(launch_field, ref_val=ref_val, remesh_every=remesh_every)
+        u = prop.prop2end(launch_field, ref_val=ref_val, remesh_every=remesh_every)
     else:
-        u, u0 = prop.prop2end(launch_field(xg, yg))
+        u = prop.prop2end(launch_field(xg, yg))
 
     xg, yg = np.meshgrid(mesh.xy.xa, mesh.xy.ya, indexing='ij')
 

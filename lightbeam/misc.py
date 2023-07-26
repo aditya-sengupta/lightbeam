@@ -96,3 +96,21 @@ def timeit_maker(method, useprint):
 
 timeit = partial(timeit_maker, useprint=print)
 timeit_tqdm = partial(timeit_maker, useprint=tqdm.tqdm.write)
+
+
+# I want something close to Chain.jl in Python
+# remove this before any merges! this is just me being annoying
+def chain(*args):
+    def chain_func(inp):
+        o = inp
+        for a in args:
+            o = a(o)
+        return o
+    return chain_func
+
+def chain_apply(inp, *args):
+    return chain(*args)(inp)
+
+def lmc(inp, *args):
+    """ list-map-chain """
+    return list(map(chain(*args), inp))

@@ -45,7 +45,7 @@ class RectMesh2D:
         dx,dy = self.dx0,self.dy0
         Nbc = self.Nbc
 
-        self.shape0_comp = (int(round(xw/dx)+1),int(round(yw/dy)+1))
+        self.shape0_comp = (int(np.round(xw/dx)+1),int(np.round(yw/dy)+1))
         xres,yres = self.shape0_comp[0] + 2*Nbc , self.shape0_comp[1] + 2*Nbc
 
         self.shape0 = (xres,yres)
@@ -88,7 +88,7 @@ class RectMesh2D:
 
     def dxa2xa(self,dxa):
         N = len(dxa)
-        out = np.zeros(N+1)
+        out = np.zeros(N+1) * self.xm
         np.cumsum(dxa,out=out[1:])
         return out + self.xm
 
@@ -292,7 +292,7 @@ class RectMesh3D:
         # base is a uniform mesh. can be refined
         self.xw,self.yw,self.zw = xw,yw,zw
         self.ds,self.dz = ds,dz
-        self.xres,self.yres,self.zres = round(xw/ds)+1+2*PML, round(yw/ds)+1+2*PML, round(zw/dz)+1
+        self.xres,self.yres,self.zres = int(np.round(xw/ds))+1+2*PML, int(np.round(yw/ds))+1+2*PML, int(np.round(zw/dz))+1
 
         self.xa = np.linspace(-xw/2-PML*ds,xw/2+PML*ds,self.xres)
         self.ya = np.linspace(-xw/2-PML*ds,xw/2+PML*ds,self.yres)
