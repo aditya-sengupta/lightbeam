@@ -12,6 +12,8 @@ from .mesh import RectMesh3D, RectMesh2D
 from .optics import OpticSys
 from .misc import overlap, normalize, overlap_nonu, norm_nonu, resize, genc, timeit, timeit_tqdm
 
+from lightbeamrs import tri_solve_vec
+
 ### to do ###
 
 ## performance
@@ -22,8 +24,6 @@ from .misc import overlap, normalize, overlap_nonu, norm_nonu, resize, genc, tim
 
 # more efficient ways to store arrays with many repeated values -- some sort of sparse-like data structure?
 
-# optimize tri_solve_vec : maybe try out dask (parallelize) -- WHY IS THIS ALSO SLOWER
-
 #ignore shifting of IOR arrays in trimats calc? 
 
 ## readability
@@ -32,24 +32,6 @@ from .misc import overlap, normalize, overlap_nonu, norm_nonu, resize, genc, tim
 # combine some functions into "remesh" and "recompute" functions
 # remove unused functions
 # move all the eval strings somewhere else (together)
-
-@njit(void(nbc128[:,:],nbc128[:,:],nbc128[:,:],nbc128[:,:],nbc128[:,:],nbc128[:,:]))
-def tri_solve_vec(a,b,c,r,g,u):
-    '''Apply Thomas' method for simultaneously solving a set of tridagonal systems. a, b, c, and r are matrices
-    (N rows) where each column corresponds a separate system'''
-
-    N = a.shape[0]
-    beta = b[0]
-    u[0] = r[0]/beta
-    
-    for j in range(1,N):
-        g[j] = c[j-1]/beta
-        beta = b[j] - a[j]*g[j]
-        u[j] = (r[j] - a[j]*u[j-1])/beta
-
-    for j in range(N-1):
-        k = N-2-j
-        u[k] = u[k] - g[k+1]*u[k+1]
 
 class Prop3D:
     '''beam propagator. employs finite-differences beam propagation with PML as the boundary condition. works on an adaptive mesh'''

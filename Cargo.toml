@@ -10,10 +10,10 @@ crate-type = ["cdylib"]
 path = "lightbeam/lib.rs"
 
 [dependencies]
-ndarray = "0.15.6"
+ndarray = { version = "0.15.6", features = ["rayon"] }
 pyo3 = "0.18.1"
 numpy = "0.18.0"
-rayon = "1.5.0"
+rayon = "1.7.0"
 
 [profile.release]
 debug = true       # Debug symbols for our profiler.
