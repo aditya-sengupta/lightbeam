@@ -1,14 +1,27 @@
-use pyo3::Py;
 use pyo3::{
+    Py,
     pymodule, types::PyModule,
-    PyResult, Python
+    PyResult, Python, pyclass
 };
-use pyo3::ffi::PyObject;
-use numpy::{PyReadonlyArray1,PyReadonlyArray2,PyReadwriteArray2,Complex64,ToPyArray,PyArray};
-use ndarray::{Array,Zip,Axis,Dim,s};
+use numpy::{PyReadonlyArray1,PyReadonlyArray2,PyArray,PyReadwriteArray2,Complex64, ToPyArray};
+use ndarray::{Zip,Axis,Array1,Dim};
 use ndarray::parallel::prelude::*;
 
-/// A Python module implemented in Rust.
+
+/* a collection of functions for antialiasing circles'''
+
+## calculate circle-square overlap.
+
+# original code in pixwt.c by Marc Buie
+# ported to pixwt.pro (IDL) by Doug Loucks, Lowell Observatory, 1992 Sep
+# subsequently ported to python by Michael Fitzgerald,
+# LLNL, fitzgerald15@llnl.gov, 2007-10-16
+# (hopefully finally) ported to python-callable Rust by Aditya Sengupta,
+# UCSC, adityars@ucsself.edu, 2023 Aug
+
+### Marc Buie, you are my hero
+*/
+
 #[pymodule]
 fn lightbeamrs(_py: Python, m: &PyModule) -> PyResult<()> {
     #[pyfn(m)]
@@ -43,116 +56,72 @@ fn lightbeamrs(_py: Python, m: &PyModule) -> PyResult<()> {
             }); 
     }
 
-    #[pyfn(m)]
-    fn _arc(py: Python, x: PyReadonlyArray1<'_, f64>, y0: PyReadonlyArray1<'_, f64>, y1: PyReadonlyArray1<'_, f64>, r: f64) -> PyResult<Py<PyArray<f64, Dim<[usize; 1]>>>> {
-        let x = x.as_array();
-        let y0 = y0.as_array();
-        let y1 = y1.as_array();
-        let res = Zip::from(x).and(y0).and(y1)
-            .par_map_collect(|xe, y0e, y1e| 0.5 * r * r * (y1e.atan2(*xe) - y0e.atan2(*xe)));
-
-        Ok(res.to_pyarray(py).to_owned())
+    fn arc(x: f64, y0: f64, y1: f64, r: f64) -> f64 {
+        0.5 * r * r * (y1.atan2(x) - y0.atan2(x))
     }
 
-    #[pyfn(m)]
-    fn _chord(py: Python, x: PyReadonlyArray1<'_, f64>, y0: PyReadonlyArray1<'_, f64>, y1: PyReadonlyArray1<'_, f64>) -> PyResult<Py<PyArray<f64, Dim<[usize; 1]>>>> {
-        let x = x.as_array().to_owned();
-        let y0 = y0.as_array().to_owned();
-        let y1 = y1.as_array().to_owned();
-        let res = 0.5 * x * (y1 - y0);
-
-        Ok(res.to_pyarray(py).to_owned())
+    fn chord(x: f64, y0: f64, y1: f64) -> f64 {
+        0.5 * x * (y1 - y0)
     }
 
-    /*#[pyfn(m)]
-    fn where_zero(py: Python, x: PyReadonlyArray1<'_, f64>) -> PyResult<Py<PyArray<bool, Dim<[usize; 1]>>>> {
-        let x = x.as_array().to_owned();
-        let res = x.mapv(|x| x == 0.0);
-        Ok(res.to_pyarray(py).to_owned())
-    }*/
-
-    /*#[pyfn(m)]
-    /* 
-    Compute the area of intersection between a triangle and a circle.
-    The circle is centered at the origin and has a radius of r.  The
-    triangle has verticies at the origin and at (x,y0) and (x,y1).
-    This is a signed area.  The path is traversed from y0 to y1.  If
-    this path takes you clockwise the area will be negative.
-     */
-    fn _oneside(py: Python, x: PyReadonlyArray1<'_, f64>, y0: PyReadonlyArray1<'_, f64>, y1: PyReadonlyArray1<'_, f64>, r: f64) -> PyResult<Py<PyArray<f64, Dim<[usize; 1]>>>> {
-        let x = x.as_array();
-        let y0 = y0.as_array();
-        let y1 = y1.as_array();
-
-        if x.mapv(|x| x == 0.0).all() {
-            return Ok(x.to_pyarray(py).to_owned());
+    fn oneside_one(x: f64, y0: f64, y1: f64, r: f64) -> f64 {
+        if x == 0.0 { return 0.0 }
+        if x.abs() >= r { return arc(x, y0, y1, r) }
+        let yh = (r * r - x * x).sqrt();
+        if y0 <= -yh {
+            if y1 <= -yh { return arc(x, y0, y1, r) }
+            else if (y1 > -yh) & (y1 <= yh) { return arc(x, y0, -yh, r) + chord(x, -yh, y1) }
+            else { return arc(x, y0, -yh, r) + chord(x, -yh, yh) + arc(x, yh, y1, r) }
+        } else if (y0 > -yh) & (y0 < yh) {
+            if y1 <= -yh { return chord(x, y0, -yh) + arc(x, -yh, y1, r) }
+            else if (y1 > -yh) & (y1 <= yh) { return chord(x, y0, y1) }
+            else { return chord(x, y0, yh) + arc(x, yh, y1, r) }
+        } else {
+            if y1 <= -yh { return arc(x, y0, yh, r) + chord(x, yh, -yh) + arc(x, -yh, y1, r) }
+            else if (y1 > -yh) & (y1 <= yh) { return arc(x, y0, yh, r) + chord(x, yh, y1) }
+            else { return arc(x, y0, y1, r) }
         }
+    }
 
-        let sx = x.raw_dim();
-        let mut ans = Array::zeros(sx);
-        let yh = Array::zeros(sx);
-        let to = s!(x.mapv(|x| x.abs() >= r));
-        let ti = s!(x.mapv(|x| x.abs() < r));
-        if to.len() > 0 {
-            ans[to] = _arc(x[to], y0[to], y1[to], r);
+    fn oneside(x: &Array1<f64>, y0: &Array1<f64>, y1: &Array1<f64>, r: f64) -> Array1<f64> {
+        let mut onesides = Array1::zeros(x.len());
+        Zip::from(&mut onesides).and(x).and(y0).and(y1).into_par_iter().for_each(|(o, xi, y0i, y1i)| *o = oneside_one(*xi, *y0i, *y1i, r));
+        return onesides;
+    }
+
+    struct CircleRectangle {
+        r: f64,
+        x0: Array1<f64>,
+        x1: Array1<f64>,
+        y0: Array1<f64>,
+        y1: Array1<f64>
+    }
+
+    impl CircleRectangle {
+        fn intarea(&self) -> Array1<f64> {
+            return oneside(&self.x1, &self.y0, &self.y1, self.r) + 
+                   oneside(&self.y1, &(-self.x1.clone()), &(-self.x0.clone()), self.r) + 
+                   oneside(&(-self.x0.clone()), &(-self.y1.clone()), &(-self.y0.clone()), self.r) + 
+                   oneside(&(-self.y0.clone()), &self.x0, &self.x1, self.r);
         }
-        if to.len() == 0 {
-            return ans;
-        }
+    }
 
-        yh[ti] = sqrt(r**2 - x[ti]**2);
+    // pixwt is this but with x0 = x - 0.5, x1 = x + 0.5 and the same for y
+    #[pyfn(m)]
+    fn intarea(py: Python, xc: f64, yc: f64, r: f64, x0: PyReadonlyArray1<'_, f64>, x1: PyReadonlyArray1<'_, f64>, y0: PyReadonlyArray1<'_, f64>, y1: PyReadonlyArray1<'_, f64>) -> Py<PyArray<f64, Dim<[usize; 1]>>> {
+        let x0 = x0.as_array().to_owned() - xc;
+        let y0 = y0.as_array().to_owned() - yc;
+        let x1 = x1.as_array().to_owned() - xc;
+        let y1 = y1.as_array().to_owned() - yc;
+        let cr = &CircleRectangle { r: r, x0: x0, x1: x1, y0: y0, y1: y1 };
+        let res = cr.intarea();
+        return res.to_pyarray(py).to_owned();
+    }
 
-        let i = (slice!(y0 <= -yh) & ti);
-        if i.len() > 0 {
-            let j = (slice!(y1 <= -yh) & i);
-            if j.len() > 0 {
-                ans[j] = _arc(x[j], y0[j], y1[j], r);
-            }
-            j = (slice!(y1 > -yh) & slice!(y1 <= yh) & i);
-            if j.len() > 0 {
-                ans[j] = _arc(x[j], y0[j], -yh[j], r) + _chord(x[j], -yh[j], y1[j])
-            }
-            j = (slice!(y1 > yh) & i);
-            if j.len() > 0 {
-                ans[j] = _arc(x[j], y0[j], -yh[j], r) + _chord(x[j], -yh[j], yh[j]) + _arc(x[j], yh[j], y1[j], r)
-            }
-        }
-        i = (slice!(y0 > -yh) & slice!(y0 < yh) & ti);
-        if i.len() > 0 {
-            j = (slice!(y1 <= -yh) & i);
-            if j.len() > 0 {
-                ans[j] = _chord(x[j], y0[j], -yh[j]) + _arc(x[j], -yh[j], y1[j], r)
-            }
-
-            j = (s!(y1 > -yh) & s!(y1 <= yh) & i);
-            if j.len() > 0 {
-                ans[j] = _chord(x[j], y0[j], y1[j])
-            }
-
-            j = (s!(y1 > yh) & i);
-            if j.len() > 0 {
-                ans[j] = _chord(x[j], y0[j], yh[j]) + _arc(x[j], yh[j], y1[j], r)
-            }
-        }
-        i = ((y0 >= yh) & ti);
-        if i.len() > 0 {
-            j = ((y1 <= -yh) & i);
-            if j.len() > 0 {
-                ans[j] = _arc(x[j], y0[j], yh[j], r) + _chord(x[j], yh[j], -yh[j]) + _arc(x[j], -yh[j], y1[j], r)
-            }
-
-            j = ((y1 > -yh) & (y1 <= yh) & i);
-            if j.len() > 0 {
-                ans[j] = _arc(x[j], y0[j], yh[j], r) + _chord(x[j], yh[j], y1[j])
-            }
-
-            j = ((y1 > yh) & i);
-            if j.len() > 0 {
-                ans[j] = _arc(x[j], y0[j], y1[j], r)
-            }
-        }
-        return ans
-    }*/
+    #[pyclass(subclass)]
+    struct Prop3Drs {
+        
+    }
     
     Ok(())
 }

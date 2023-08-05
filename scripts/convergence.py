@@ -56,5 +56,5 @@ def compute_port_power(ds, AMR=False, ref_val=2e-4, max_iters=5, remesh_every=50
     return np.array(output_powers)
 
 if __name__ == "__main__":
-    output = compute_port_power(1/16, False)
+    output = compute_port_power(1/16)
     print(output)

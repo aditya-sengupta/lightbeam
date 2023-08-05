@@ -201,8 +201,6 @@ class OpticSys(OpticPrim):
         '''replace values of out with IOR^2, given coordinate grids xg, yg, and z location.'''
         bbox,bboxh = self.bbox_idx(z)
         out[bbox] = self.nb2*coeff
-        # with get_context("spawn").Pool(10) as p:
-        #    p.map(lambda e: OpticPrim.set_IORsq(e, out, z, coeff), [self.elements])
         for elmnt in self.elements:
             elmnt.set_IORsq(out,z,coeff)
 

@@ -12,7 +12,7 @@ from .mesh import RectMesh3D, RectMesh2D
 from .optics import OpticSys
 from .misc import overlap, normalize, overlap_nonu, norm_nonu, resize, genc, timeit, timeit_tqdm
 
-from lightbeamrs import tri_solve_vec
+from lightbeamrs import tri_solve_vec#, Prop3Drs
 
 ### to do ###
 
@@ -32,6 +32,12 @@ from lightbeamrs import tri_solve_vec
 # combine some functions into "remesh" and "recompute" functions
 # remove unused functions
 # move all the eval strings somewhere else (together)
+
+# @njit(void(nbc128[:,:],nbc128[:,:],nbc128[:],nbc128[:],nbc128[:],nbc128[:]))
+def _rmat_pmlcorrect(_rmat, u, pix, apml, bpml, cpml):
+    _rmat[pix] = apml[:,None]*u[pix-1] + bpml[:,None]*u[pix] + cpml[:,None]*u[pix+1]
+    _rmat[pix][0] = bpml[0]*u[0] + cpml[0]*u[1]
+    _rmat[pix][-1] = apml[-1]*u[-2] + bpml[-1]*u[-1]
 
 class Prop3D:
     '''beam propagator. employs finite-differences beam propagation with PML as the boundary condition. works on an adaptive mesh'''
@@ -268,14 +274,7 @@ class Prop3D:
 
         pix = self.mesh.xy.pvert_ix
 
-        temp = np.empty_like(_rmat[pix])
-
-        temp[1:-1] = apml[1:-1,None]*u[pix-1][1:-1] + bpml[1:-1,None]*u[pix][1:-1] + cpml[1:-1,None]*u[pix+1][1:-1]
-
-        temp[0] = bpml[0]*u[0] + cpml[0]*u[1]
-        temp[-1] = apml[-1]*u[-2] + bpml[-1]*u[-1]
-
-        _rmat[pix] = temp
+        _rmat_pmlcorrect(_rmat, u, pix, apml, bpml, cpml)
 
     def rmat(self,_rmat,u,IORsq,which='x'):
         ix = self.mesh.xy.cvert_ix
@@ -492,7 +491,7 @@ class Prop3D:
         self._pmlcorrect('y')
         return xy, u
 
-    def prop2end(self, _u, xyslice=None, zslice=None, u1_func=None, writeto=None, ref_val=5.e-6, remesh_every=0, dynamic_n0 = False,fplanewidth=0):
+    def prop2end(self, _u, xyslice=None, zslice=None, u1_func=None, writeto=None, ref_val=5.e-6, remesh_every=0, dynamic_n0 = False,fplanewidth=0, store_totalpower=False):
         u = self._prop_setup(_u, xyslice, zslice, ref_val, fplanewidth, remesh_every > 0)
         counter = 0
         xy = self.mesh.xy
@@ -528,7 +527,8 @@ class Prop3D:
             weights = xy.get_weights()
             
             ## Total power monitor ##
-            self.totalpower[i] = overlap_nonu(u,u,weights)
+            if store_totalpower:
+                self.totalpower[i] = overlap_nonu(u,u,weights)
 
             ## Other monitors ##
             if u1_func is not None:
@@ -568,8 +568,12 @@ class Prop3D:
             z__ = __z
             if remesh_every == 0 or (i+2) % remesh_every != 0:
                 self.IORsq__[:,:] = self.__IORsq
-  
-        print("final total power",self.totalpower[-1])
+
+        if store_totalpower:
+            final_totalpower = self.totalpower[-1]
+        else:
+            final_totalpower = overlap_nonu(u,u,weights)
+        print("final total power", final_totalpower)
         
         if writeto:
             np.save(writeto,self.field)

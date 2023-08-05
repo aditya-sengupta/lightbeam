@@ -193,7 +193,7 @@ class RectMesh2D:
             plt.show()
     
     def get_base_field(self,u):
-        return u[self.xix_base].T[self.yix_base].T
+        return u[self.xix_base,self.yix_base].T
 
     def _compute_refinement_factor(self,u0,crit_val):
         ''' given some electric field u0, compute values that corresponds to the degree of refinement required
