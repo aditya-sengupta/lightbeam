@@ -33,12 +33,6 @@ from lightbeamrs import tri_solve_vec#, Prop3Drs
 # remove unused functions
 # move all the eval strings somewhere else (together)
 
-# @njit(void(nbc128[:,:],nbc128[:,:],nbc128[:],nbc128[:],nbc128[:],nbc128[:]))
-def _rmat_pmlcorrect(_rmat, u, pix, apml, bpml, cpml):
-    _rmat[pix] = apml[:,None]*u[pix-1] + bpml[:,None]*u[pix] + cpml[:,None]*u[pix+1]
-    _rmat[pix][0] = bpml[0]*u[0] + cpml[0]*u[1]
-    _rmat[pix][-1] = apml[-1]*u[-2] + bpml[-1]*u[-1]
-
 class Prop3D:
     '''beam propagator. employs finite-differences beam propagation with PML as the boundary condition. works on an adaptive mesh'''
     def __init__(self, wl0, mesh:RectMesh3D, optical_system:OpticSys, n0):
@@ -274,7 +268,14 @@ class Prop3D:
 
         pix = self.mesh.xy.pvert_ix
 
-        _rmat_pmlcorrect(_rmat, u, pix, apml, bpml, cpml)
+        temp = np.empty_like(_rmat[pix])
+
+        temp[1:-1] = apml[1:-1,None]*u[pix-1][1:-1] + bpml[1:-1,None]*u[pix][1:-1] + cpml[1:-1,None]*u[pix+1][1:-1]
+
+        temp[0] = bpml[0]*u[0] + cpml[0]*u[1]
+        temp[-1] = apml[-1]*u[-2] + bpml[-1]*u[-1]
+
+        _rmat[pix] = temp
 
     def rmat(self,_rmat,u,IORsq,which='x'):
         ix = self.mesh.xy.cvert_ix

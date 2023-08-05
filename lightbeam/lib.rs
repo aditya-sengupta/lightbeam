@@ -83,13 +83,17 @@ fn lightbeamrs(_py: Python, m: &PyModule) -> PyResult<()> {
         }
     }
 
-    fn oneside(x: &Array1<f64>, y0: &Array1<f64>, y1: &Array1<f64>, r: f64) -> Array1<f64> {
+    #[pyfn(m)]
+    fn oneside(py: Python, x: PyReadonlyArray1<'_, f64>, y0: PyReadonlyArray1<'_, f64>, y1: PyReadonlyArray1<'_, f64>, r: f64) -> Py<PyArray<f64, Dim<[usize; 1]>>> {
+        let x = x.as_array().to_owned();
+        let y0 = y0.as_array().to_owned();
+        let y1 = y1.as_array().to_owned();
         let mut onesides = Array1::zeros(x.len());
-        Zip::from(&mut onesides).and(x).and(y0).and(y1).into_par_iter().for_each(|(o, xi, y0i, y1i)| *o = oneside_one(*xi, *y0i, *y1i, r));
-        return onesides;
+        Zip::from(&mut onesides).and(&x).and(&y0).and(&y1).into_par_iter().for_each(|(o, xi, y0i, y1i)| *o = oneside_one(*xi, *y0i, *y1i, r));
+        return onesides.to_pyarray(py).to_owned();
     }
 
-    struct CircleRectangle {
+    /*struct CircleRectangle {
         r: f64,
         x0: Array1<f64>,
         x1: Array1<f64>,
@@ -104,10 +108,10 @@ fn lightbeamrs(_py: Python, m: &PyModule) -> PyResult<()> {
                    oneside(&(-self.x0.clone()), &(-self.y1.clone()), &(-self.y0.clone()), self.r) + 
                    oneside(&(-self.y0.clone()), &self.x0, &self.x1, self.r);
         }
-    }
+    }*/
 
     // pixwt is this but with x0 = x - 0.5, x1 = x + 0.5 and the same for y
-    #[pyfn(m)]
+    /*#[pyfn(m)]
     fn intarea(py: Python, xc: f64, yc: f64, r: f64, x0: PyReadonlyArray1<'_, f64>, x1: PyReadonlyArray1<'_, f64>, y0: PyReadonlyArray1<'_, f64>, y1: PyReadonlyArray1<'_, f64>) -> Py<PyArray<f64, Dim<[usize; 1]>>> {
         let x0 = x0.as_array().to_owned() - xc;
         let y0 = y0.as_array().to_owned() - yc;
@@ -116,12 +120,7 @@ fn lightbeamrs(_py: Python, m: &PyModule) -> PyResult<()> {
         let cr = &CircleRectangle { r: r, x0: x0, x1: x1, y0: y0, y1: y1 };
         let res = cr.intarea();
         return res.to_pyarray(py).to_owned();
-    }
-
-    #[pyclass(subclass)]
-    struct Prop3Drs {
-        
-    }
+    }*/
     
     Ok(())
 }

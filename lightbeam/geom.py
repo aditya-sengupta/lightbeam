@@ -1,7 +1,22 @@
 import numpy as np
 from numpy import logical_not as NOT, logical_and as AND, logical_or as OR
 from numba import njit
-from lightbeamrs import intarea
+from lightbeamrs import oneside as _oneside
+
+def intarea(xc, yc, r, x0, x1, y0, y1):
+    """
+    Compute the area of overlap of a circle and a rectangle.
+      xc, yc  :  Center of the circle.
+      r       :  Radius of the circle.
+      x0, y0  :  Corner of the rectangle.
+      x1, y1  :  Opposite corner of the rectangle.
+    """
+    x0 = x0 - xc
+    y0 = y0 - yc
+    x1 = x1 - xc
+    y1 = y1 - yc
+    return _oneside(x1, y0, y1, r) + _oneside(y1, -x1, -x0, r) + \
+           _oneside(-x0, -y1, -y0, r) + _oneside(-y0, x0, x1, r)
 
 # @njit
 def nonu_pixwt(xc,yc,r,x,y,rx,ry,dx,dy):
