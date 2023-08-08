@@ -166,9 +166,6 @@ class ScaledCyl(OpticPrim):
         yg = self.xymesh.yg[bbox]
         xhg = self.xymesh.xhg[bboxh]
         yhg = self.xymesh.yhg[bboxh]
-        if xhg.shape != yhg.shape:
-            print("about to error")
-            print(self.xymesh.xhg.shape, self.xymesh.yhg.shape, bboxh)
         AA_circle_nonu(out,xg,yg,xhg,yhg,center,self.r*scale,self.nb2*coeff,self.n2*coeff,bbox,self.rxg,self.ryg,self.dxg,self.dyg)
     
 class OpticSys(OpticPrim):

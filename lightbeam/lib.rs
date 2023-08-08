@@ -1,7 +1,7 @@
 use pyo3::{
     Py,
     pymodule, types::PyModule,
-    PyResult, Python, pyclass
+    PyResult, Python, pyclass, pymethods
 };
 use numpy::{PyReadonlyArray1,PyReadonlyArray2,PyArray,PyReadwriteArray2,Complex64, ToPyArray};
 use ndarray::{Zip,Axis,Array1,Dim};
@@ -83,14 +83,10 @@ fn lightbeamrs(_py: Python, m: &PyModule) -> PyResult<()> {
         }
     }
 
-    #[pyfn(m)]
-    fn oneside(py: Python, x: PyReadonlyArray1<'_, f64>, y0: PyReadonlyArray1<'_, f64>, y1: PyReadonlyArray1<'_, f64>, r: f64) -> Py<PyArray<f64, Dim<[usize; 1]>>> {
-        let x = x.as_array().to_owned();
-        let y0 = y0.as_array().to_owned();
-        let y1 = y1.as_array().to_owned();
+    fn oneside(x: Array1<f64>, y0: Array1<f64>, y1: Array1<f64>, r: f64) -> Array1<f64> {
         let mut onesides = Array1::zeros(x.len());
         Zip::from(&mut onesides).and(&x).and(&y0).and(&y1).into_par_iter().for_each(|(o, xi, y0i, y1i)| *o = oneside_one(*xi, *y0i, *y1i, r));
-        return onesides.to_pyarray(py).to_owned();
+        return onesides;
     }
 
     /*struct CircleRectangle {
@@ -111,16 +107,18 @@ fn lightbeamrs(_py: Python, m: &PyModule) -> PyResult<()> {
     }*/
 
     // pixwt is this but with x0 = x - 0.5, x1 = x + 0.5 and the same for y
-    /*#[pyfn(m)]
+    #[pyfn(m)]
     fn intarea(py: Python, xc: f64, yc: f64, r: f64, x0: PyReadonlyArray1<'_, f64>, x1: PyReadonlyArray1<'_, f64>, y0: PyReadonlyArray1<'_, f64>, y1: PyReadonlyArray1<'_, f64>) -> Py<PyArray<f64, Dim<[usize; 1]>>> {
         let x0 = x0.as_array().to_owned() - xc;
         let y0 = y0.as_array().to_owned() - yc;
         let x1 = x1.as_array().to_owned() - xc;
         let y1 = y1.as_array().to_owned() - yc;
-        let cr = &CircleRectangle { r: r, x0: x0, x1: x1, y0: y0, y1: y1 };
-        let res = cr.intarea();
+        let res = oneside(x1.clone(), y0.clone(), y1.clone(), r) + 
+        oneside(y1.clone(), -x1.clone(), -x0.clone(), r) + 
+        oneside(-x0.clone(), -y1, -y0.clone(), r) + 
+        oneside(-y0, x0, x1, r);
         return res.to_pyarray(py).to_owned();
-    }*/
+    }
     
     Ok(())
 }

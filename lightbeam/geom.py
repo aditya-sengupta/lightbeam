@@ -1,22 +1,7 @@
 import numpy as np
 from numpy import logical_not as NOT, logical_and as AND, logical_or as OR
 from numba import njit
-from lightbeamrs import oneside as _oneside
-
-def intarea(xc, yc, r, x0, x1, y0, y1):
-    """
-    Compute the area of overlap of a circle and a rectangle.
-      xc, yc  :  Center of the circle.
-      r       :  Radius of the circle.
-      x0, y0  :  Corner of the rectangle.
-      x1, y1  :  Opposite corner of the rectangle.
-    """
-    x0 = x0 - xc
-    y0 = y0 - yc
-    x1 = x1 - xc
-    y1 = y1 - yc
-    return _oneside(x1, y0, y1, r) + _oneside(y1, -x1, -x0, r) + \
-           _oneside(-x0, -y1, -y0, r) + _oneside(-y0, x0, x1, r)
+from lightbeamrs import intarea
 
 # @njit
 def nonu_pixwt(xc,yc,r,x,y,rx,ry,dx,dy):
@@ -48,9 +33,18 @@ def AA_circle_nonu(
 @njit
 def get_masks(rsqh,R2):
     maskh = (rsqh <= R2)
-
+    n_maskh = NOT(maskh)
     mask_in = AND(maskh[1:,1:], AND(maskh[1:,:-1], AND(maskh[:-1,1:],maskh[:-1,:-1]))) 
-    mask_out = AND(NOT(maskh[1:,1:]), AND(NOT(maskh[1:,:-1]), AND(NOT(maskh[:-1,1:]),NOT(maskh[:-1,:-1])))) 
+    mask_out = AND(
+        n_maskh[1:,1:], 
+        AND(
+            n_maskh[1:,:-1], 
+            AND(
+                n_maskh[:-1,1:], 
+                n_maskh[:-1,:-1]
+            )
+        )
+    ) 
     mask_b = NOT(OR(mask_in,mask_out))
     
     return mask_in, mask_b

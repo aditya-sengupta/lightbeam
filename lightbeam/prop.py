@@ -12,7 +12,7 @@ from .mesh import RectMesh3D, RectMesh2D
 from .optics import OpticSys
 from .misc import overlap, normalize, overlap_nonu, norm_nonu, resize, genc, timeit, timeit_tqdm
 
-from lightbeamrs import tri_solve_vec#, Prop3Drs
+from lightbeamrs import tri_solve_vec
 
 ### to do ###
 
@@ -260,7 +260,6 @@ class Prop3D:
         _c[ix][-1] = s*R1[-1] - 1/r[-1]/(r[-1]+1)/(dla[-1]*dla[-1]) - 0.25*R1[-1]*(_IORsq[-1]-self.n02*self.k02)
 
     def rmat_pmlcorrect(self,_rmat,u,which='x'):
-
         if which == 'x':    
             apml,bpml,cpml = self.apmlx_,self.bpmlx_,self.cpmlx_
         else:
