@@ -12,7 +12,7 @@ from .mesh import RectMesh3D, RectMesh2D
 from .optics import OpticSys
 from .misc import overlap, normalize, overlap_nonu, norm_nonu, resize, genc, timeit, timeit_tqdm
 
-from lightbeamrs import tri_solve_vec
+from .lightbeamrs import tri_solve_vec#, Prop3Drs
 
 ### to do ###
 
