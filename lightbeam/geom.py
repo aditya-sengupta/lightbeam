@@ -1,7 +1,7 @@
 import numpy as np
 from numpy import logical_not as NOT, logical_and as AND, logical_or as OR
 from numba import njit
-from lightbeamrs import oneside as _oneside
+from .lightbeamrs import oneside as _oneside
 
 def intarea(xc, yc, r, x0, x1, y0, y1):
     """
