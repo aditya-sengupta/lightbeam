@@ -346,7 +346,7 @@ class Prop3D:
             _b[ix] = self._bpmly[:,None]
             _c[ix] = self._cpmly[:,None]
 
-    def _prop_setup(self, u, xyslice, zslice, ref_val, fplanewidth, remeshing):
+    def _prop_setup(self, u, xyslice, zslice, ref_val, fplanewidth, remeshing, verbose=True):
         mesh = self.mesh
         PML = mesh.PML
 
@@ -375,10 +375,10 @@ class Prop3D:
         # the latter option allows for coarse base grids to be used 
         # without being penalized by forcing the use of a low resolution
         # launch field
-
-        if type(u) is np.ndarray:
+        if isinstance(u, np.ndarray):
             _power = overlap(u, u)
-            print("input power: ", _power)
+            if verbose:
+                print("input power: ", _power)
 
             # normalize the field, preserving the input power. accounts for grid resolution
             normalize(u, weight=dx0*dy0,normval=_power)
@@ -409,7 +409,8 @@ class Prop3D:
             # must be of the form u(x,y)
             u, uf = u(xy.xg, xy.yg), u
             _power = overlap(u, u)
-            print('input power: ', _power)
+            if verbose:
+                print('input power: ', _power)
             
             # normalize the field, preserving the input power. accounts for grid resolution
             normalize(u, weight=dx0*dy0, normval=_power)
@@ -491,12 +492,13 @@ class Prop3D:
         self._pmlcorrect('y')
         return xy, u
 
-    def prop2end(self, _u, xyslice=None, zslice=None, u1_func=None, writeto=None, ref_val=5.e-6, remesh_every=0, dynamic_n0 = False,fplanewidth=0, store_totalpower=False):
-        u = self._prop_setup(_u, xyslice, zslice, ref_val, fplanewidth, remesh_every > 0)
+    def prop2end(self, _u, xyslice=None, zslice=None, u1_func=None, writeto=None, ref_val=5.e-6, remesh_every=0, dynamic_n0 = False,fplanewidth=0, store_totalpower=False, verbose=True, r=trange):
+        u = self._prop_setup(_u, xyslice, zslice, ref_val, fplanewidth, remesh_every > 0, verbose=verbose)
         counter = 0
         xy = self.mesh.xy
         
-        print("propagating field...")
+        if verbose:
+            print("propagating field...")
         
         __z = 0
         z__ = 0
@@ -520,8 +522,9 @@ class Prop3D:
         #get the current IOR dist
         self.set_IORsq(self.IORsq__, z__)
 
-        print("initial shape: ",xy.shape)
-        for i in trange(self.mesh.zres):
+        if verbose:
+            print("initial shape: ",xy.shape)
+        for i in r(self.mesh.zres):
             u0 = xy.get_base_field(u)
             u0c = np.conj(u0)
             weights = xy.get_weights()
@@ -573,7 +576,8 @@ class Prop3D:
             final_totalpower = self.totalpower[-1]
         else:
             final_totalpower = overlap_nonu(u,u,weights)
-        print("final total power", final_totalpower)
+        if verbose:
+            print("final total power", final_totalpower)
         
         if writeto:
             np.save(writeto,self.field)
