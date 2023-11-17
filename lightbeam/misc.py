@@ -41,7 +41,8 @@ def overlap_nonu(u1, u2, weights):
 
 def normalize(u0, weight=1, normval = 1):
     norm = np.sqrt(normval/overlap(u0,u0,weight))
-    return u0 * norm
+    u0 *= norm
+    return u0
 
 def norm_nonu(u0, weights, normval = 1):
     norm = np.sqrt(normval/overlap_nonu(u0,u0,weights))

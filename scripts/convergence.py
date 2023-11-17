@@ -11,7 +11,7 @@ def compute_port_power(ds, AMR=False, ref_val=2e-4, max_iters=5, remesh_every=50
     # mesh 
     xw = 64 #um
     yw = 64 #um
-    zw = 1000 #um
+    zw = 10000 #um
     num_PML = int(4/ds) # number of cells
     dz = 1
 
@@ -27,11 +27,11 @@ def compute_port_power(ds, AMR=False, ref_val=2e-4, max_iters=5, remesh_every=50
     ncore = nclad + 0.0088
     njack = nclad - 5.5e-3
 
-    # lant = make_lant3big(rclad/2, rcore, rclad, 0, zw, (ncore, nclad, njack), final_scale=taper_factor)
-    lant = make_lant6_saval(rclad/2, rcore, rclad, 0, zw, (ncore, nclad, njack), final_scale=taper_factor)
+    lant = make_lant3big(rclad/2, rcore, rclad, 0, zw, (ncore, nclad, njack), final_scale=taper_factor)
+    # lant = make_lant6_saval(rclad/2, rcore, rclad, 0, zw, (ncore, nclad, njack), final_scale=taper_factor)
 
     def launch_field(x, y):
-        return normalize(lpfield(x, y, 0, 1, rclad, wl, ncore, nclad))
+        return normalize(np.exp(10.j * x * wl / xw) * lpfield(x, y, 0, 1, rclad, wl, ncore, nclad))
         
     # propagation
 
@@ -56,5 +56,5 @@ def compute_port_power(ds, AMR=False, ref_val=2e-4, max_iters=5, remesh_every=50
     return np.array(output_powers)
 
 if __name__ == "__main__":
-    output = compute_port_power(1/16, False)
+    output = compute_port_power(1/4, False)
     print(output)
