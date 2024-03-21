@@ -329,6 +329,10 @@ class RectMesh3D:
         ix2 = bisect_left(self.ya,xy.ym-TOL)
         ix3 = bisect_left(self.ya,xy.yM-TOL)
         return ix0,ix1,ix2,ix3
+    
+    def grids_without_pml(self):
+        p = self.PML
+        return self.xy.xg[p:-p,p:-p], self.xy.yg[p:-p,p:-p] 
 
     def sigmax(self,x):
         '''dimensionless, divided by e0 omega'''

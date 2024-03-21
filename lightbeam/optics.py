@@ -124,6 +124,7 @@ class ScaledCyl(OpticPrim):
         self.n2 = n*n
         self.z_ex = z_ex
         self.z_offset = z_offset
+        self.AA = True
 
         def linear_func(_min,_max):
             slope =  (_max - _min)/self.z_ex
@@ -158,6 +159,10 @@ class ScaledCyl(OpticPrim):
         '''overwrite base function to incorporate anti-aliasing and improve convergence'''
         if not (self.z_offset <= z <= self.z_offset+self.z_ex):
             return
+        
+        if not self.AA:
+            super().set_IORsq(out,z,coeff)
+            return
 
         center = (self.xoffset_func(z),self.yoffset_func(z))
         scale = self.scale_func(z)
@@ -166,7 +171,10 @@ class ScaledCyl(OpticPrim):
         yg = self.xymesh.yg[bbox]
         xhg = self.xymesh.xhg[bboxh]
         yhg = self.xymesh.yhg[bboxh]
-        AA_circle_nonu(out,xg,yg,xhg,yhg,center,self.r*scale,self.nb2*coeff,self.n2*coeff,bbox,self.rxg,self.ryg,self.dxg,self.dyg)
+        m = self.xymesh
+        rxg,ryg = np.meshgrid(m.rxa,m.rya,indexing='ij')
+        dxg,dyg = np.meshgrid(m.dxa,m.dya,indexing='ij')
+        AA_circle_nonu(out,xg,yg,xhg,yhg,center,self.r*scale,self.nb2*coeff,self.n2*coeff,bbox,rxg,ryg,dxg,dyg)
     
 class OpticSys(OpticPrim):
     '''base class for optical systems, collections of primitives immersed in some background medium'''
@@ -234,7 +242,7 @@ class Lantern(OpticSys):
             ScaledCyl([0.0, 0.0], rclad, z_ex, nclad, njack, scale_func=scale_func, final_scale=final_scale)
         )
 
-        if not(type(port_radii) in (list, np.ndarray)):
+        if type(port_radii) not in (list, np.ndarray):
             port_radii = repeat(port_radii)
 
         for (port, rcore) in zip(port_positions, port_radii):
@@ -324,15 +332,15 @@ def make_lant19(core_spacing, *args, **kwargs):
         ypos = core_spacing*np.sin(i*np.pi/3)
         positions.append([xpos,ypos])
     
-    startpos = np.array([2*core_spacing,0])
+    startpos = [2*core_spacing,0]
     startang = 2*np.pi/3
-    pos.append(startpos)
+    positions.append(startpos)
     for i in range(11):
         if i%2==0 and i!=0:
             startang += np.pi/3
         nextpos = startpos + np.array([core_spacing*np.cos(startang),core_spacing*np.sin(startang)])
-        pos.append(nextpos)
+        positions.append(list(nextpos))
         startpos = nextpos
 
-    return Lantern(pos, *args, **kwargs)
+    return Lantern(positions, *args, **kwargs)
 

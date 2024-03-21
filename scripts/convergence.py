@@ -1,8 +1,7 @@
 ''' Example tests showcasing the potential savings in computation time offered by AMR.'''
 
-import matplotlib.pyplot as plt
 import numpy as np
-from lightbeam import RectMesh3D, make_lant3big, make_lant6_saval, Prop3D, normalize, lpfield, norm_nonu, overlap_nonu
+from lightbeam import RectMesh3D, make_lant3big, Prop3D, normalize, lpfield, norm_nonu, overlap_nonu
 
 def compute_port_power(ds, AMR=False, ref_val=2e-4, max_iters=5, remesh_every=50):
     # wavelength
@@ -11,7 +10,7 @@ def compute_port_power(ds, AMR=False, ref_val=2e-4, max_iters=5, remesh_every=50
     # mesh 
     xw = 64 #um
     yw = 64 #um
-    zw = 10000 #um
+    zw = 1000 #um
     num_PML = int(4/ds) # number of cells
     dz = 1
 

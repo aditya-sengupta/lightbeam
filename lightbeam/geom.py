@@ -30,24 +30,16 @@ def AA_circle_nonu(
     newvals = n1 * area + n0 * (1-area)
     out_where[mask_b] = newvals
 
-@njit
 def get_masks(rsqh,R2):
-    maskh = (rsqh <= R2)
-    n_maskh = NOT(maskh)
+    maskh = np.full(rsqh.shape, False)
+    maskh[rsqh <= R2] = True
+    
     mask_in = AND(maskh[1:,1:], AND(maskh[1:,:-1], AND(maskh[:-1,1:],maskh[:-1,:-1]))) 
-    mask_out = AND(
-        n_maskh[1:,1:], 
-        AND(
-            n_maskh[1:,:-1], 
-            AND(
-                n_maskh[:-1,1:], 
-                n_maskh[:-1,:-1]
-            )
-        )
-    ) 
+    mask_out = AND(NOT(maskh[1:,1:]), AND(NOT(maskh[1:,:-1]), AND(NOT(maskh[:-1,1:]),NOT(maskh[:-1,:-1])))) 
     mask_b = NOT(OR(mask_in,mask_out))
     
-    return mask_in, mask_b
+    return mask_in,mask_b
+
 
 # put AA_circle and pixwt back in before merge
 # I'm just removing them now to indicate they don't need to be Rust-ified
