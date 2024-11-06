@@ -492,7 +492,7 @@ class Prop3D:
         self._pmlcorrect('y')
         return xy, u
 
-    def prop2end(self, _u, xyslice=None, zslice=None, u1_func=None, writeto=None, ref_val=5.e-6, remesh_every=0, dynamic_n0 = False,fplanewidth=0, store_totalpower=False, verbose=True, r=trange):
+    def prop2end(self, _u, xyslice=None, zslice=None, u1_func=None, writeto=None, ref_val=5.e-6, remesh_every=0, dynamic_n0 = False,fplanewidth=0, store_totalpower=False, verbose=True, r=trange, ):
         u = self._prop_setup(_u, xyslice, zslice, ref_val, fplanewidth, remesh_every > 0, verbose=verbose)
         counter = 0
         xy = self.mesh.xy

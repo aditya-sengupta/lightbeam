@@ -1,13 +1,15 @@
 
+import numpy as np
 import matplotlib.pyplot as plt
+import lightbeam as lb
 rcore = 21.8/2
 ncore = 1.4504
 nclad = 1.4504 - 5.5e-3
 
 import hcipy as hc
 
-V = get_V(2*np.pi,rcore,ncore,nclad)
-modes = get_modes(V)
+V = lb.LPmodes.get_V(2*np.pi,rcore,ncore,nclad)
+modes = lb.LPmodes.get_modes(V)
 
 for mode in modes:
 
@@ -16,7 +18,7 @@ for mode in modes:
 
     if mode[0]==0:
         print(mode)
-        lp= lpfield(xg,yg,mode[0],mode[1],rcore,1,ncore,nclad,'cos')
+        lp= lb.LPmodes.lpfield(xg,yg,mode[0],mode[1],rcore,1,ncore,nclad,'cos')
         lp /= np.max(lp)
 
         f = hc.Field(lp.flatten() , hc.make_pupil_grid((1000,1000),diameter=30) )
@@ -27,7 +29,7 @@ for mode in modes:
     else:
 
         print(mode,"cos")
-        lp= lpfield(xg,yg,mode[0],mode[1],rcore,1,ncore,nclad,'cos')
+        lp= lb.LPmodes.lpfield(xg,yg,mode[0],mode[1],rcore,1,ncore,nclad,'cos')
         lp /= np.max(lp)
 
         f = hc.Field(lp.flatten() , hc.make_pupil_grid((1000,1000),diameter=30) )
@@ -36,7 +38,7 @@ for mode in modes:
         plt.show()
 
         print(mode,'sin')
-        lp= lpfield(xg,yg,mode[0],mode[1],rcore,1,ncore,nclad,'sin')
+        lp= lb.LPmodes.lpfield(xg,yg,mode[0],mode[1],rcore,1,ncore,nclad,'sin')
         lp /= np.max(lp)
 
         f = hc.Field(lp.flatten() , hc.make_pupil_grid((1000,1000),diameter=30) )

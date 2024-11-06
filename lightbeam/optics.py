@@ -341,6 +341,5 @@ def make_lant19(core_spacing, *args, **kwargs):
         nextpos = startpos + np.array([core_spacing*np.cos(startang),core_spacing*np.sin(startang)])
         positions.append(list(nextpos))
         startpos = nextpos
-
     return Lantern(positions, *args, **kwargs)
 
