@@ -1,14 +1,8 @@
 import numpy as np
-from matplotlib import pyplot as plt
 import lightbeam as lb
-import hcipy as hc
-from hcipy import imshow_field
-from tqdm import trange
-
 import sys
-z_cutoff = int(sys.argv[1])
 
-wl = 1.0
+wl = 1.55
 core_offset = 10 # offset of cores from origin
 ncore = 1.4504 + 0.0088 # lantern core refractive index
 nclad = 1.4504 # cladding index
@@ -18,12 +12,8 @@ rcore = 2.2
 final_scale = 8 # tapering factor of lantern
 z_ex = 60_000
 
-def partial_taper(z):
-    if z < z_cutoff:
-        return 1 + (1 / final_scale - 1) / z_cutoff * z
-    return 1 / final_scale
-
-lant = lb.optics.make_lant19(core_offset,rcore,rclad,0,z_ex, (ncore,nclad,njack),final_scale=1/final_scale, scale_func=partial_taper)
+rcores = [rcore for _ in range(19)]
+lant = lb.optics.make_lant19(core_offset,rcores,rclad,0,z_ex, (ncore,nclad,njack),final_scale=1/final_scale)
 
 mesh = lb.RectMesh3D(
         xw = 512, # um
@@ -53,5 +43,4 @@ input_mask = input_footprint >= nclad**2
 xl, yl = np.where(input_mask)
 proj_xmin, proj_xmax = np.min(xl), np.max(xl)
 proj_ymin, proj_ymax = np.min(yl), np.max(yl)
-np.save(f"data/backprop_taper_{z_cutoff}.npy", outputs)
-
+np.save(f"data/vary_core_sizes_backwards_19_base.npy", outputs)
